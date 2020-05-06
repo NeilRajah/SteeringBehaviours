@@ -11,13 +11,22 @@
   * @param {*} y Y value
   * @param {*} theta Angle in radians
   */
- function Tracker(x, y, theta, speed) {
+ function Tracker(x, y, theta) {
      this.x = x;
      this.y = y;
      this.theta = theta;
-     this.speed = speed
+     this.maxLin = 6;
+     this.maxAng = 1;
+     this.speed = this.maxLin;
+     this.ang = this.maxAng;
+     this.mass = 1;
 
      this.move = function(dx, dy) {this.x += dx; this.y += dy;};
+     this.velVector = () => [this.speed * Math.cos(this.theta), this.speed * Math.sin(this.theta)];
+     this.dirVector = (mag) => [mag * Math.cos(theta), mag * Math.sin(theta)];
+     this.getX = () => this.x;
+     this.getY = () => this.y;
+     this.xy = function() {return [this.x, this.y]};
  }
 
  /**
