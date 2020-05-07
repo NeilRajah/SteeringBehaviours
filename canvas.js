@@ -20,7 +20,7 @@ function main() {
         offset = 10
         goal = [e.x - offset, e.y - offset];
     });
-    this.interval = setInterval(loop, 1000/30) //loop at 30fps
+    this.interval = setInterval(loop, 1000/50) //loop at 30fps
 }
 
 /**
@@ -55,13 +55,13 @@ function initialize() {
 function loop() {
     // console.log(t)
     clear();
+    arrive(t);
     if (t.arrived) {
         goal = [Math.random() * 500, Math.random() * 500];
         t.arrived = false;
-        // console.log(t.x, t.y);
-    } 
-    arrive(t);
-    seek(t);
+    } else {
+        seek(t);
+    }
     drawGoal();
     drawTracker(t);
 }
@@ -76,17 +76,17 @@ function seek(t) {
 
     //steering vector
     dTheta = Math.abs(t.theta - heading(desired));
-    // t.speed *= mag(subtract(t.xy(), goal)) > 30 ? angleScale(dTheta) : 1;
+    t.speed *= mag(subtract(t.xy(), goal)) > 30 ? angleScale(dTheta) : 1;
+
     current = t.velVector();
-    // t.ang = Math.abs(angleBetween(current, desired)) < 0.05 ? 0: t.ang;
-    steering = setMag(subtract(current, desired), t.ang);
+    steering = limit(subtract(current, desired), t.ang); //limit to the current angular speed
 
     //rotate
     vel = add(current, steering);
 
     //update
     t.move(vel[0], vel[1]);
-    t.theta = t.speed < 0.000001 ? t.theta : heading(vel) //don't turn if not moving
+    t.theta = heading(vel)
 }
 
 /**
@@ -102,11 +102,10 @@ function arrive(t) {
         dist = mag(subtract(goal, t.xy()));
         scale = dist < endDist ? 0 : dist / goalDist;
         t.speed = t.maxLin * scale; //ramp down linearly
-        t.ang = 0; //don't turn
+        t.ang = dist < endDist ? 0 : t.ang;
 
         if (dist <= endDist) {
             t.arrived = true;
-            t.speed = 0.0001;
         }
 
     } else { //anywhere else
@@ -139,6 +138,18 @@ function mag(xy) {
 }
 
 /**
+ * Limit a vector to a magnitude
+ * @param {*} xy Vector to limit
+ * @param {*} magnitude Magnitude cap
+ */
+function limit(xy, magnitude) {
+    if (mag(xy) > magnitude) {
+        return setMag(xy, magnitude);
+    }
+    return xy;
+}
+
+/**
  * Calculate the angle between two vectors
  * @param {*} v1 First vector
  * @param {*} v2 Second vector
@@ -154,7 +165,8 @@ function angleBetween(v1, v2) {
  * @returns Scale factor between 0 and 1
  */
 function angleScale(dTheta) {
-    return dTheta > Math.PI/2 ? 0 : 1 - (Math.pow(dTheta, 2) / Math.pow(Math.PI/2, 2));
+    return dTheta > Math.PI/2 ? 0.5 : 1 - (Math.pow(dTheta, 2) / Math.pow(Math.PI/2, 2)) + 0.5;
+    // return 1;
 }
 
 /**
