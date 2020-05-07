@@ -16,12 +16,13 @@
      this.y = y;
      this.theta = theta;
      this.maxLin = 4;
-     this.maxAng = 0.8;
+     this.maxAng = 0.4;
      this.speed = this.maxLin;
      this.ang = this.maxAng;
      this.mass = 1;
 
      this.move = function(dx, dy) {this.x += dx; this.y += dy;};
+     this.step = function() {this.x += this.velVector()[0]; this.y += this.velVector()[1];}
      this.velVector = () => [this.speed * Math.cos(this.theta), this.speed * Math.sin(this.theta)];
      this.dirVector = (mag) => [mag * Math.cos(theta), mag * Math.sin(theta)];
      this.getX = () => this.x;

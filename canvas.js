@@ -35,7 +35,7 @@ function initialize() {
     c = canvas.getContext('2d');
 
     //create tracker
-    t = new Tracker(20, 20, 0, 0);
+    t = new Tracker(250, 250, 0, 0);
     img = new Image();
     img.src = "https://tinyurl.com/y99qsysr";
     t.img = img;
@@ -60,7 +60,7 @@ function loop() {
         goal = [Math.random() * 500, Math.random() * 500];
         t.arrived = false;
     } else {
-        seek(t);
+        seek(t)
     }
     drawGoal();
     drawTracker(t);
@@ -74,7 +74,7 @@ function seek(t) {
     //desired vector
     desired = setMag(subtract(t.xy(), goal), t.speed);
 
-    //steering vector
+    //modify linear output based on angle difference
     dTheta = Math.abs(t.theta - heading(desired));
     t.speed *= mag(subtract(t.xy(), goal)) > 30 ? angleScale(dTheta) : 1;
 
@@ -87,6 +87,17 @@ function seek(t) {
     //update
     t.move(vel[0], vel[1]);
     t.theta = heading(vel)
+
+    //----------------------------
+
+    // desired = setMag(subtract(t.xy(), goal), t.speed);
+    // current = t.velVector();
+    // steering = subtract(current, desired);
+    // twist = Math.min(t.maxAng, angleBetween(desired, current) * 0.2);
+    // // t.theta -= Math.sign(heading(steering)) * twist;
+    // t.theta = 2 *Math.PI/2;
+    // console.log(Math.sign(heading(steering)))
+    // t.step();
 }
 
 /**
@@ -103,10 +114,7 @@ function arrive(t) {
         scale = dist < endDist ? 0 : dist / goalDist;
         t.speed = t.maxLin * scale; //ramp down linearly
         t.ang = dist < endDist ? 0 : t.ang;
-
-        if (dist <= endDist) {
-            t.arrived = true;
-        }
+        t.arrived = dist < endDist;
 
     } else { //anywhere else
         t.speed = t.maxLin;
@@ -143,10 +151,7 @@ function mag(xy) {
  * @param {*} magnitude Magnitude cap
  */
 function limit(xy, magnitude) {
-    if (mag(xy) > magnitude) {
-        return setMag(xy, magnitude);
-    }
-    return xy;
+    return mag(xy) > magnitude ? setMag(xy, magnitude) : xy;
 }
 
 /**
@@ -162,7 +167,8 @@ function angleBetween(v1, v2) {
 /**
  * Scale linear output based on angle difference
  * @param {*} dTheta Angle difference
- * @returns Scale factor between 0 and 1
+ * @returns Scale factor between 0.5 and 1
+ * change this to account for more ranges
  */
 function angleScale(dTheta) {
     return dTheta > Math.PI/2 ? 0.5 : 1 - (Math.pow(dTheta, 2) / Math.pow(Math.PI/2, 2)) + 0.5;
@@ -170,8 +176,9 @@ function angleScale(dTheta) {
 }
 
 /**
- * Return the angle the vector is pointing at, between -pi/2 and pi/2
- * @param {*} xy 
+ * Return the angle the vector is pointing at
+ * @param {*} xy Vector to get heading from 
+ * @returns Angle vector is pointing at from -pi/2 to pi/2
  */
 function heading(xy) {
     return Math.atan2(xy[1], xy[0]);
@@ -239,18 +246,30 @@ function moveTracker(dx, dy) {
 function drawTracker(t) {
     half = t.imgsize / 2;
     c.save();
-
     c.translate(t.x, t.y);
     c.rotate(t.theta + Math.PI/2);
     c.drawImage(t.img, -half, -half, t.imgsize, t.imgsize);
-
     c.restore();
+
+    //draw vectors
+    // c.save();
+    // // c.translate(t.x, t.y)
+    // c.fillStyle = "green";
+    // drawLine(c, 0, 0, t.desired[0], t.desired[1]);
+    // c.fillStyle = "black";
+    // drawLine(c, 0, 0, t.velVector()[0], t.velVector()[1]);
+    // c.fillStyle = "red";
+    // drawLine(c, 0, 0, t.steering[0], t.steering[1]);
+    // c.restore();
 }
 
-//Main Script
-// window.onload = initialize()
-// window.onload = function () {
-//     img = document.getElementById('tracker')
-// }
+function drawLine(c, x1, y1, x2, y2) {
+    c.beginPath()
+    c.moveTo(x1, y1);
+    c.lineTo(x2, y2);
+    c.stroke();
+    c.moveTo(0, 0);
+}
+
 initialize();
 main();
