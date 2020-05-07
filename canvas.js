@@ -40,6 +40,7 @@ function initialize() {
     img.src = "https://tinyurl.com/y99qsysr";
     t.img = img;
     t.imgsize = 30;
+    t.arrived = false;
 
     //create goal
     goal = [400, 225];
@@ -54,6 +55,11 @@ function initialize() {
 function loop() {
     // console.log(t)
     clear();
+    if (t.arrived) {
+        goal = [Math.random() * 500, Math.random() * 500];
+        t.arrived = false;
+        // console.log(t.x, t.y);
+    } 
     arrive(t);
     seek(t);
     drawGoal();
@@ -66,12 +72,13 @@ function loop() {
  */
 function seek(t) {
     //desired vector
-    desired = setMag(subtract(t.xy(), goal), t.maxLin);
-    // console.log(mag([380, 205]))
-    // console.log(t.xy(), goal)
+    desired = setMag(subtract(t.xy(), goal), t.speed);
 
     //steering vector
+    dTheta = Math.abs(t.theta - heading(desired));
+    // t.speed *= mag(subtract(t.xy(), goal)) > 30 ? angleScale(dTheta) : 1;
     current = t.velVector();
+    // t.ang = Math.abs(angleBetween(current, desired)) < 0.05 ? 0: t.ang;
     steering = setMag(subtract(current, desired), t.ang);
 
     //rotate
@@ -79,23 +86,42 @@ function seek(t) {
 
     //update
     t.move(vel[0], vel[1]);
-    t.theta = heading(vel)
+    t.theta = t.speed < 0.000001 ? t.theta : heading(vel) //don't turn if not moving
 }
 
+/**
+ * Slow a Tracker down based on how far it is from the goal
+ * @param {*} t Tracker to adjust
+ */
 function arrive(t) {
-    goalDist = 20;
-    endDist = 2;
-    if (isWithinBounds(t.xy(), goal, goalDist)) {
+    //distance away from goal and finish distance
+    goalDist = 30;
+    endDist = 5;
+
+    if (isWithinBounds(t.xy(), goal, goalDist)) { //if in ramping zone
         dist = mag(subtract(goal, t.xy()));
-        scale = dist < endDist ? 0 : dist / (goalDist - endDist);
-        t.speed = t.maxLin * scale;
-        t.ang = 0;
-    } else {
+        scale = dist < endDist ? 0 : dist / goalDist;
+        t.speed = t.maxLin * scale; //ramp down linearly
+        t.ang = 0; //don't turn
+
+        if (dist <= endDist) {
+            t.arrived = true;
+            t.speed = 0.0001;
+        }
+
+    } else { //anywhere else
         t.speed = t.maxLin;
         t.ang = t.maxAng;
     }
 }
 
+/**
+ * Whether the distance between two points is within an epsilon
+ * @param {*} current Point 1
+ * @param {*} goal Point 2
+ * @param {*} epsilon Distance apart to be considered 'close enough'
+ * @returns True if distance between points is less than epsilon, false if not
+ */
 function isWithinBounds(current, goal, epsilon) {
     dx = goal[0] - current[0];
     dy = goal[1] - current[1];
@@ -110,6 +136,25 @@ function isWithinBounds(current, goal, epsilon) {
  */
 function mag(xy) {
     return Math.sqrt(xy[0] * xy[0] + xy[1] * xy[1]);
+}
+
+/**
+ * Calculate the angle between two vectors
+ * @param {*} v1 First vector
+ * @param {*} v2 Second vector
+ * @returns Angle between the two vectors in radians
+ */
+function angleBetween(v1, v2) {
+    return Math.atan2(v2[1], v2[0]) - Math.atan2(v1[1], v1[0]);
+}
+
+/**
+ * Scale linear output based on angle difference
+ * @param {*} dTheta Angle difference
+ * @returns Scale factor between 0 and 1
+ */
+function angleScale(dTheta) {
+    return dTheta > Math.PI/2 ? 0 : 1 - (Math.pow(dTheta, 2) / Math.pow(Math.PI/2, 2));
 }
 
 /**
