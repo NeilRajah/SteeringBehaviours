@@ -15,7 +15,7 @@
      this.x = x;
      this.y = y;
      this.theta = theta;
-     this.maxLin = 4;
+     this.maxLin = 6;
      this.maxAng = 0.8;
      this.speed = this.maxLin;
      this.ang = this.maxAng;
@@ -28,6 +28,7 @@
      this.getX = () => this.x;
      this.getY = () => this.y;
      this.xy = function() {return [this.x, this.y]};
+     this.setPose = function(x,y,theta) {this.x = x; this.y = y; this.theta = theta;};
  }
 
  /**

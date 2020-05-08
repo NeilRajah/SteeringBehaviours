@@ -12,6 +12,7 @@
  var goal; //goal point
  var goals;
  var goalIndex;
+ var dir;
 
 
  /**
@@ -19,10 +20,10 @@
   */
 function main() {
     //update goal on mouse move
-    window.addEventListener('mousemove', function (e) {
-        offset = 10
-        goal = [e.x - offset, e.y - offset];
-    });
+    // window.addEventListener('mousemove', function (e) {
+    //     offset = 10
+    //     goal = [e.x - offset, e.y - offset];
+    // });
     this.interval = setInterval(loop, 1000/50) //run loop periodically
 }
 
@@ -37,29 +38,30 @@ function initialize() {
     canvas.height = window.innerHeight * winScale;
     c = canvas.getContext('2d');
 
+    //create goals
+    goals = []
+    steps = 9;
+    dir = true;
+
+    //radial pattern
+    // r = 200
+    // step = 2*Math.PI / steps;
+    // for (i = 0; i < steps; i++) {
+    //     goals[i] = [start[0] + r * Math.cos(step * i), start[1] + r * Math.sin(step * i)]
+    // }
+
+    //path pattern
+    createRandomGoals();
+
     //create tracker
-    start = [250, 250];
-    t = new Tracker(start[0], start[1], Math.PI);
+    //start at the first goal point, move along
+    t = new Tracker(goals[0][0], goals[0][1], heading(subtract(goals[0], goals[1])));
     img = new Image();
     img.src = "https://tinyurl.com/y99qsysr";
     t.img = img;
     t.imgsize = 30;
     t.arrived = false;
-    t.reverse = true;
-
-    //create goals
-    goals = []
-    r = 200
-    steps = 8;
-    step = 2*Math.PI / steps;
-    for (i = 0; i < steps; i++) {
-        goals[i] = [start[0] + r * Math.cos(step * i), start[1] + r * Math.sin(step * i)]
-    }
-    goalIndex = 0;
-    goal = goals[0];
-
-    //add key listeners
-    console.log(t);
+    t.reverse = false;
 }
 
 /**
@@ -71,11 +73,17 @@ function loop() {
     arrive(t);
     if (t.arrived) {
         goal = [Math.random() * canvas.width, Math.random() * canvas.height];
-        t.reverse = Math.random() > 0.5;
+        // t.reverse = Math.random() > 0.5;
         t.arrived = false;
 
-        // goalIndex = (goalIndex + 1) % goals.length;
-        // goal = goals[goalIndex];
+        goalIndex++;
+        if (goalIndex >= goals.length) {
+            goalIndex = 0;
+            dir = !dir;
+            createRandomGoals();
+            t.setPose(goals[0][0], goals[0][1], heading(subtract(goals[0], goals[1])))
+        }
+        goal = goals[goalIndex];
         // t.x = start[0];
         // t.y = start[1];
         // t.theta = 0;
@@ -83,8 +91,23 @@ function loop() {
     } else {
         seek(t)
     }
-    drawPoint(goal[0], goal[1]);
+    drawGoals(c)
     drawTracker(t);
+}
+
+/**
+ * Create a random list of goals moving across the width of the canvas
+ * @param {*} dir True if left to right, false if right to left 
+ */
+function createRandomGoals() {
+    step = canvas.width / (steps);
+    
+    for (i = 0; i < steps-1; i++) {
+        goals[i] = [(i+1) * step, Math.random() * canvas.height]
+    }
+
+    goalIndex = 0;
+    goal = goals[0];
 }
 
 /**
@@ -147,6 +170,8 @@ function arrive(t) {
         t.ang = t.maxAng;
     }
 }
+
+//Utility
 
 /**
  * Return the number with the minimum magnitude
@@ -270,13 +295,15 @@ function add(v1, v2) {
     return [v1[0] + v2[0], v1[1] + v2[1]];
 }
 
+//Graphics
+
 /**
  * Draw a point
  * @param {*} x X value for center of circle
  * @param {*} y Y value for center of circle
  */
-function drawPoint(x, y) {
-    c.fillStyle = "red"
+function drawPoint(x, y, color) {
+    c.fillStyle = color
     c.beginPath();
     c.arc(x, y, 10, 0, 2 * Math.PI);
     c.fill();
@@ -291,17 +318,8 @@ function clear() {
 }
 
 /**
- * Move the tracker
- * @param {*} dx Change in x
- * @param {*} dy Change in y
- */
-function moveTracker(dx, dy) {
-    t.move(dx, dy);
-    draw(t);
-}
-
-/**
  * Draw a Tracker object
+ * @param {*} t Tracker to draw
  */
 function drawTracker(t) {
     half = t.imgsize / 2;
@@ -310,17 +328,6 @@ function drawTracker(t) {
     c.rotate(t.theta + Math.PI/2);
     c.drawImage(t.img, -half, -half, t.imgsize, t.imgsize);
     c.restore();
-
-    //draw vectors
-    // c.save();
-    // // c.translate(t.x, t.y)
-    // c.fillStyle = "green";
-    // drawLine(c, 0, 0, t.desired[0], t.desired[1]);
-    // c.fillStyle = "black";
-    // drawLine(c, 0, 0, t.velVector()[0], t.velVector()[1]);
-    // c.fillStyle = "red";
-    // drawLine(c, 0, 0, t.steering[0], t.steering[1]);
-    // c.restore();
 }
 
 function drawLine(c, x1, y1, x2, y2) {
@@ -328,7 +335,23 @@ function drawLine(c, x1, y1, x2, y2) {
     c.moveTo(x1, y1);
     c.lineTo(x2, y2);
     c.stroke();
-    c.moveTo(0, 0);
+}
+
+function drawGoals(c) {
+    //draw lines
+    c.strokeStyle = "red";
+    c.lineWidth = 3;
+    c.beginPath();
+    c.moveTo(goals[0][0], goals[0][1]);
+    for (i = 1; i < goals.length; i++) {
+        c.lineTo(goals[i][0], goals[i][1]);
+    }
+    c.stroke();
+
+    //draw points
+    for (i = 0; i < goals.length; i++) {
+        drawPoint(goals[i][0], goals[i][1], "red");
+    }
 }
 
 initialize();
