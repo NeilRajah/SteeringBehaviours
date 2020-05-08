@@ -55,7 +55,7 @@ function initialize() {
         goals[i] = [start[0] + r * Math.cos(step * i), start[1] + r * Math.sin(step * i)]
     }
     goalIndex = 0;
-    goal = goals[0];
+    goal = goals[4];
 
     //add key listeners
     console.log(t);
@@ -69,15 +69,17 @@ function loop() {
     clear();
     arrive(t);
     if (t.arrived) {
-        // goal = [Math.random() * 500, Math.random() * 500];
+        goal = [Math.random() * 500, Math.random() * 500];
 
-        goalIndex = (goalIndex + 1) % goals.length;
-        goal = goals[goalIndex];
+        // goalIndex = (goalIndex + 1) % goals.length;
+        // goal = goals[goalIndex];
         t.x = start[0];
         t.y = start[1];
         t.theta = 0;
         t.arrived = false;
         console.log("------------------------")
+
+        // clearInterval(loop);
     } else {
         seek(t)
     }
@@ -122,10 +124,10 @@ function seek(t) {
     absAng = heading(delta);
     relAng = absAng - (t.theta - Math.PI/2);
     relAng = relAng - 2*Math.PI * Math.floor((relAng + Math.PI) / (2*Math.PI));
-    console.log(relAng)
     relX = Math.cos(relAng) * distance;
     relY = Math.sin(relAng) * distance;
     relTurn = relAng - Math.PI/2;
+    console.log(relTurn);
     t.theta += relTurn * 0.1
     t.step();
 }
