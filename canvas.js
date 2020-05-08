@@ -10,6 +10,9 @@
  var c; //canvas context for drawing
  var t; //Tracker
  var goal; //goal point
+ var goals;
+ var goalIndex;
+
 
  /**
   * Create the canvas and run the main loop
@@ -35,7 +38,8 @@ function initialize() {
     c = canvas.getContext('2d');
 
     //create tracker
-    t = new Tracker(250, 250, 0, 0);
+    start = [250, 250];
+    t = new Tracker(start[0], start[1], 0, 0);
     img = new Image();
     img.src = "https://tinyurl.com/y99qsysr";
     t.img = img;
@@ -43,7 +47,15 @@ function initialize() {
     t.arrived = false;
 
     //create goal
-    goal = [400, 225];
+    goals = []
+    r = 200
+    steps = 10;
+    step = 2*Math.PI / steps;
+    for (i = 0; i < steps; i++) {
+        goals[i] = [start[0] + r * Math.cos(step * i), start[1] + r * Math.sin(step * i)]
+    }
+    goalIndex = 0;
+    goal = goals[0];
 
     //add key listeners
     console.log(t);
@@ -57,8 +69,15 @@ function loop() {
     clear();
     arrive(t);
     if (t.arrived) {
-        goal = [Math.random() * 500, Math.random() * 500];
+        // goal = [Math.random() * 500, Math.random() * 500];
+
+        goalIndex = (goalIndex + 1) % goals.length;
+        goal = goals[goalIndex];
+        t.x = start[0];
+        t.y = start[1];
+        t.theta = 0;
         t.arrived = false;
+        console.log("------------------------")
     } else {
         seek(t)
     }
@@ -71,33 +90,44 @@ function loop() {
  * @param {*} t Tracker to update
  */
 function seek(t) {
-    //desired vector
-    desired = setMag(subtract(t.xy(), goal), t.speed);
+    // //desired vector
+    // desired = setMag(subtract(t.xy(), goal), t.speed);
 
-    //modify linear output based on angle difference
-    dTheta = Math.abs(t.theta - heading(desired));
-    t.speed *= mag(subtract(t.xy(), goal)) > 30 ? angleScale(dTheta) : 1;
+    // //modify linear output based on angle difference
+    // dTheta = Math.abs(t.theta - heading(desired));
+    // t.speed *= mag(subtract(t.xy(), goal)) > 30 ? angleScale(dTheta) : 1;
 
-    current = t.velVector();
-    steering = limit(subtract(current, desired), t.ang); //limit to the current angular speed
+    // current = t.velVector();
+    // steering = limit(subtract(current, desired), t.ang); //limit to the current angular speed
 
-    //rotate
-    vel = add(current, steering);
+    // //rotate
+    // vel = add(current, steering);
 
-    //update
-    t.move(vel[0], vel[1]);
-    t.theta = heading(vel)
+    // //update
+    // t.move(vel[0], vel[1]);
+    // t.theta = heading(vel)
 
     //----------------------------
 
     // desired = setMag(subtract(t.xy(), goal), t.speed);
     // current = t.velVector();
     // steering = subtract(current, desired);
-    // twist = Math.min(t.maxAng, angleBetween(desired, current) * 0.2);
-    // // t.theta -= Math.sign(heading(steering)) * twist;
-    // t.theta = 2 *Math.PI/2;
-    // console.log(Math.sign(heading(steering)))
+    // // twist = Math.min(t.maxAng, angleBetween(desired, current) * 0.2);
+    // t.theta += (heading(steering) - t.theta) * 0.01;
     // t.step();
+
+    delta = subtract(t.xy(), goal);
+    distance = mag(delta);
+
+    absAng = heading(delta);
+    relAng = absAng - (t.theta - Math.PI/2);
+    relAng = relAng - 2*Math.PI * Math.floor((relAng + Math.PI) / (2*Math.PI));
+    console.log(relAng)
+    relX = Math.cos(relAng) * distance;
+    relY = Math.sin(relAng) * distance;
+    relTurn = relAng - Math.PI/2;
+    t.theta += relTurn * 0.1
+    t.step();
 }
 
 /**

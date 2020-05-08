@@ -16,7 +16,7 @@
      this.y = y;
      this.theta = theta;
      this.maxLin = 4;
-     this.maxAng = 0.4;
+     this.maxAng = 0.1;
      this.speed = this.maxLin;
      this.ang = this.maxAng;
      this.mass = 1;
