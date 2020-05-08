@@ -23,7 +23,7 @@ function main() {
         offset = 10
         goal = [e.x - offset, e.y - offset];
     });
-    this.interval = setInterval(loop, 1000/50) //loop at 30fps
+    this.interval = setInterval(loop, 1000/50) //run loop periodically
 }
 
 /**
@@ -39,7 +39,7 @@ function initialize() {
 
     //create tracker
     start = [250, 250];
-    t = new Tracker(start[0], start[1], 0, 0);
+    t = new Tracker(start[0], start[1], Math.PI/2);
     img = new Image();
     img.src = "https://tinyurl.com/y99qsysr";
     t.img = img;
@@ -49,13 +49,13 @@ function initialize() {
     //create goal
     goals = []
     r = 200
-    steps = 10;
+    steps = 8;
     step = 2*Math.PI / steps;
     for (i = 0; i < steps; i++) {
         goals[i] = [start[0] + r * Math.cos(step * i), start[1] + r * Math.sin(step * i)]
     }
     goalIndex = 0;
-    goal = goals[4];
+    goal = goals[0];
 
     //add key listeners
     console.log(t);
@@ -73,17 +73,16 @@ function loop() {
 
         // goalIndex = (goalIndex + 1) % goals.length;
         // goal = goals[goalIndex];
-        t.x = start[0];
-        t.y = start[1];
-        t.theta = 0;
+        // t.x = start[0];
+        // t.y = start[1];
+        // t.theta = 0;
         t.arrived = false;
-        console.log("------------------------")
 
         // clearInterval(loop);
     } else {
         seek(t)
     }
-    drawGoal();
+    drawPoint(goal[0], goal[1]);
     drawTracker(t);
 }
 
@@ -92,44 +91,44 @@ function loop() {
  * @param {*} t Tracker to update
  */
 function seek(t) {
-    // //desired vector
-    // desired = setMag(subtract(t.xy(), goal), t.speed);
-
-    // //modify linear output based on angle difference
-    // dTheta = Math.abs(t.theta - heading(desired));
-    // t.speed *= mag(subtract(t.xy(), goal)) > 30 ? angleScale(dTheta) : 1;
-
-    // current = t.velVector();
-    // steering = limit(subtract(current, desired), t.ang); //limit to the current angular speed
-
-    // //rotate
-    // vel = add(current, steering);
-
-    // //update
-    // t.move(vel[0], vel[1]);
-    // t.theta = heading(vel)
-
-    //----------------------------
-
-    // desired = setMag(subtract(t.xy(), goal), t.speed);
-    // current = t.velVector();
-    // steering = subtract(current, desired);
-    // // twist = Math.min(t.maxAng, angleBetween(desired, current) * 0.2);
-    // t.theta += (heading(steering) - t.theta) * 0.01;
-    // t.step();
-
     delta = subtract(t.xy(), goal);
     distance = mag(delta);
+    twopi = Math.PI * 2;
 
     absAng = heading(delta);
-    relAng = absAng - (t.theta - Math.PI/2);
-    relAng = relAng - 2*Math.PI * Math.floor((relAng + Math.PI) / (2*Math.PI));
+    relAng = angleWrap(absAng - (t.theta - Math.PI/2)); //relative angle based on current heading
+
+    relTurn = relAng - Math.PI/2;
+    // relTurn2 = Math.sign(relTurn) * twopi - relTurn;
+    relTurn2 = twopi + relTurn;
+    
     relX = Math.cos(relAng) * distance;
     relY = Math.sin(relAng) * distance;
-    relTurn = relAng - Math.PI/2;
-    console.log(relTurn);
-    t.theta += relTurn * 0.1
+
+    twist = minMag(relTurn, relTurn2);
+    // t.speed *= Math.abs(twist) > Math.PI ? 0 : Math.min((1.0 / Math.abs(degrees(twist))), 1)
+    // t.speed *= Math.min(angleScale(twist), t.maxLin)
+    twistDeg = Math.min(90, Math.abs(degrees(twist)))
+    t.speed *= -twistDeg / 90 + 1
+
+    // twist = relTurn
+    // console.log(degrees(relTurn), degrees(relTurn2));
+    // console.log(degrees(twist))
+    t.theta += Math.sign(twist) * Math.min(t.maxAng, 0.09 * Math.abs(twist));
     t.step();
+}
+
+function minMag(a, b) {
+    return Math.abs(a) < Math.abs(b) ? a : b;
+}
+
+function angleWrap(ang) {
+    return ang - 2*Math.PI * Math.floor((ang + Math.PI) / (2*Math.PI));
+    // return Math.atan2(Math.sin(ang), Math.cos(ang));
+}
+
+function degrees(angrad) {
+    return angrad * 180 / Math.PI
 }
 
 /**
@@ -245,12 +244,14 @@ function add(v1, v2) {
 }
 
 /**
- * Draw the goal point
+ * Draw a point
+ * @param {*} x X value for center of circle
+ * @param {*} y Y value for center of circle
  */
-function drawGoal() {
+function drawPoint(x, y) {
     c.fillStyle = "red"
     c.beginPath();
-    c.arc(goal[0], goal[1], 10, 0, 2 * Math.PI);
+    c.arc(x, y, 10, 0, 2 * Math.PI);
     c.fill();
 }
 
