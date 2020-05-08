@@ -32,21 +32,22 @@ function main() {
 function initialize() {
     console.log("initialize");
     canvas = document.querySelector('canvas');
-    size = 600;
-    canvas.width = size;
-    canvas.height = size;
+    winScale = 0.97;
+    canvas.width = window.innerWidth * winScale;
+    canvas.height = window.innerHeight * winScale;
     c = canvas.getContext('2d');
 
     //create tracker
     start = [250, 250];
-    t = new Tracker(start[0], start[1], Math.PI/2);
+    t = new Tracker(start[0], start[1], Math.PI);
     img = new Image();
     img.src = "https://tinyurl.com/y99qsysr";
     t.img = img;
     t.imgsize = 30;
     t.arrived = false;
+    t.reverse = true;
 
-    //create goal
+    //create goals
     goals = []
     r = 200
     steps = 8;
@@ -69,14 +70,16 @@ function loop() {
     clear();
     arrive(t);
     if (t.arrived) {
-        goal = [Math.random() * 500, Math.random() * 500];
+        // goal = [Math.random() * canvas.width, Math.random() * canvas.height];
+        // t.reverse = Math.random() > 0.5;
 
-        // goalIndex = (goalIndex + 1) % goals.length;
-        // goal = goals[goalIndex];
-        // t.x = start[0];
-        // t.y = start[1];
-        // t.theta = 0;
+        goalIndex = (goalIndex + 1) % goals.length;
+        goal = goals[goalIndex];
+        t.x = start[0];
+        t.y = start[1];
+        t.theta = 0;
         t.arrived = false;
+        t.reverse = true;
 
         // clearInterval(loop);
     } else {
@@ -91,30 +94,34 @@ function loop() {
  * @param {*} t Tracker to update
  */
 function seek(t) {
-    delta = subtract(t.xy(), goal);
-    distance = mag(delta);
     twopi = Math.PI * 2;
 
-    absAng = heading(delta);
+    //delta is difference between target and goal
+    delta = subtract(t.xy(), goal);
+    distance = mag(delta); //distance from goal
+
+    absAng = heading(delta); //absolute angle to target
     relAng = angleWrap(absAng - (t.theta - Math.PI/2)); //relative angle based on current heading
 
+    //two angles, CW and CCW
     relTurn = relAng - Math.PI/2;
-    // relTurn2 = Math.sign(relTurn) * twopi - relTurn;
     relTurn2 = twopi + relTurn;
     
+    //relative X and Y from the goal
     relX = Math.cos(relAng) * distance;
     relY = Math.sin(relAng) * distance;
 
-    twist = minMag(relTurn, relTurn2);
-    // t.speed *= Math.abs(twist) > Math.PI ? 0 : Math.min((1.0 / Math.abs(degrees(twist))), 1)
-    // t.speed *= Math.min(angleScale(twist), t.maxLin)
-    twistDeg = Math.min(90, Math.abs(degrees(twist)))
-    t.speed *= -twistDeg / 90 + 1
+    //relative angle
+    twist = angleWrap(minMag(relTurn, relTurn2) +  (t.reverse ? Math.PI : 0));
+    // twist +=;
+    // console.log(t.reverse);
 
-    // twist = relTurn
-    // console.log(degrees(relTurn), degrees(relTurn2));
-    // console.log(degrees(twist))
-    t.theta += Math.sign(twist) * Math.min(t.maxAng, 0.09 * Math.abs(twist));
+    //scale linear speed based on twist (ie. turn more & drive less if far away from target)
+    t.speed *= -Math.min(Math.PI/2, Math.abs(twist)) / (Math.PI/2) + 1 ;
+    t.speed = Math.abs(t.speed) * (t.reverse ? -1 : 1);
+
+    turnConst = 0.09; //change the angle based on how much the change in angle is needed
+    t.theta += Math.sign(twist) * Math.min(t.maxAng, turnConst * Math.abs(twist)); //limit to maximum turn rate
     t.step();
 }
 
@@ -122,11 +129,20 @@ function minMag(a, b) {
     return Math.abs(a) < Math.abs(b) ? a : b;
 }
 
+/**
+ * Constrain an angle into the [-pi,pi] domain
+ * @param {*} ang Angle in radians
+ * @returns Equivalent angle in domain
+ */
 function angleWrap(ang) {
     return ang - 2*Math.PI * Math.floor((ang + Math.PI) / (2*Math.PI));
-    // return Math.atan2(Math.sin(ang), Math.cos(ang));
 }
 
+/**
+ * Convert an angle to degrees
+ * @param {*} angrad Angle in radians
+ * @returns Equivalent angle in degrees
+ */
 function degrees(angrad) {
     return angrad * 180 / Math.PI
 }
@@ -180,6 +196,7 @@ function mag(xy) {
  * Limit a vector to a magnitude
  * @param {*} xy Vector to limit
  * @param {*} magnitude Magnitude cap
+ * @returns Vector limited to the magnitude cap
  */
 function limit(xy, magnitude) {
     return mag(xy) > magnitude ? setMag(xy, magnitude) : xy;
@@ -199,6 +216,7 @@ function angleBetween(v1, v2) {
  * Scale linear output based on angle difference
  * @param {*} dTheta Angle difference
  * @returns Scale factor between 0.5 and 1
+ * 
  * change this to account for more ranges
  */
 function angleScale(dTheta) {
@@ -219,6 +237,7 @@ function heading(xy) {
  * Normalize the vector and scale to a new magnitude
  * @param {*} xy Vector to change
  * @param {*} magnitude New magnitude to scale to 
+ * @returns Vector scaled to new magnitude
  */
 function setMag(xy, magnitude) {
     xyMag = mag(xy);
@@ -229,6 +248,7 @@ function setMag(xy, magnitude) {
  * Return the difference between two vectors
  * @param {*} v1 First vector
  * @param {*} v2 Second vector
+ * @returns (dx,dy) vector
  */
 function subtract(v1, v2) {
     return [v2[0] - v1[0], v2[1] - v1[1]];
@@ -238,6 +258,7 @@ function subtract(v1, v2) {
  * Return the sum of two vectors
  * @param {*} v1 First vector
  * @param {*} v2 Second vector
+ * @returns (x1+x2,y1+y2) vector
  */
 function add(v1, v2) {
     return [v1[0] + v2[0], v1[1] + v2[1]];
