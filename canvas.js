@@ -70,16 +70,17 @@ function loop() {
     clear();
     arrive(t);
     if (t.arrived) {
-        // goal = [Math.random() * canvas.width, Math.random() * canvas.height];
-        // t.reverse = Math.random() > 0.5;
-
-        goalIndex = (goalIndex + 1) % goals.length;
-        goal = goals[goalIndex];
-        t.x = start[0];
-        t.y = start[1];
-        t.theta = 0;
+        goal = [Math.random() * canvas.width, Math.random() * canvas.height];
+        t.reverse = Math.random() > 0.5;
         t.arrived = false;
-        t.reverse = true;
+
+        // goalIndex = (goalIndex + 1) % goals.length;
+        // goal = goals[goalIndex];
+        // t.x = start[0];
+        // t.y = start[1];
+        // t.theta = 0;
+        // t.arrived = false;
+        // t.reverse = true;
 
         // clearInterval(loop);
     } else {
@@ -153,7 +154,7 @@ function degrees(angrad) {
  */
 function arrive(t) {
     //distance away from goal and finish distance
-    goalDist = 30;
+    goalDist = 50;
     endDist = 5;
 
     if (isWithinBounds(t.xy(), goal, goalDist)) { //if in ramping zone
