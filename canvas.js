@@ -79,10 +79,7 @@ function loop() {
         // t.x = start[0];
         // t.y = start[1];
         // t.theta = 0;
-        // t.arrived = false;
         // t.reverse = true;
-
-        // clearInterval(loop);
     } else {
         seek(t)
     }
@@ -113,19 +110,49 @@ function seek(t) {
     relY = Math.sin(relAng) * distance;
 
     //relative angle
-    twist = angleWrap(minMag(relTurn, relTurn2) +  (t.reverse ? Math.PI : 0));
-    // twist +=;
-    // console.log(t.reverse);
+    twist = minMag(relTurn, relTurn2);
+    if (t.reverse) {
+        twist = angleWrap(twist + Math.PI); //pi radians away if reversing
+    }
 
     //scale linear speed based on twist (ie. turn more & drive less if far away from target)
-    t.speed *= -Math.min(Math.PI/2, Math.abs(twist)) / (Math.PI/2) + 1 ;
-    t.speed = Math.abs(t.speed) * (t.reverse ? -1 : 1);
+    t.speed *= -Math.min(Math.PI/2, Math.abs(twist)) / (Math.PI/2) + 1;
+    if (t.reverse) {
+        t.speed = -Math.abs(t.speed); //negative speed if reversing
+    }
 
     turnConst = 0.09; //change the angle based on how much the change in angle is needed
     t.theta += Math.sign(twist) * Math.min(t.maxAng, turnConst * Math.abs(twist)); //limit to maximum turn rate
     t.step();
 }
 
+/**
+ * Slow a Tracker down based on how far it is from the goal
+ * @param {*} t Tracker to adjust
+ */
+function arrive(t) {
+    //distance away from goal and finish distance
+    goalDist = 50;
+    endDist = 3;
+
+    if (isWithinBounds(t.xy(), goal, goalDist)) { //if in ramping zone
+        dist = mag(subtract(goal, t.xy()));
+        scale = dist < endDist ? 0 : dist / goalDist;
+        t.speed = t.maxLin * scale; //ramp down linearly
+        t.ang = dist < endDist ? 0 : t.ang;
+        t.arrived = dist < endDist;
+
+    } else { //anywhere else
+        t.speed = t.maxLin;
+        t.ang = t.maxAng;
+    }
+}
+
+/**
+ * Return the number with the minimum magnitude
+ * @param {*} a 
+ * @param {*} b 
+ */
 function minMag(a, b) {
     return Math.abs(a) < Math.abs(b) ? a : b;
 }
@@ -146,28 +173,6 @@ function angleWrap(ang) {
  */
 function degrees(angrad) {
     return angrad * 180 / Math.PI
-}
-
-/**
- * Slow a Tracker down based on how far it is from the goal
- * @param {*} t Tracker to adjust
- */
-function arrive(t) {
-    //distance away from goal and finish distance
-    goalDist = 50;
-    endDist = 5;
-
-    if (isWithinBounds(t.xy(), goal, goalDist)) { //if in ramping zone
-        dist = mag(subtract(goal, t.xy()));
-        scale = dist < endDist ? 0 : dist / goalDist;
-        t.speed = t.maxLin * scale; //ramp down linearly
-        t.ang = dist < endDist ? 0 : t.ang;
-        t.arrived = dist < endDist;
-
-    } else { //anywhere else
-        t.speed = t.maxLin;
-        t.ang = t.maxAng;
-    }
 }
 
 /**
