@@ -51,7 +51,8 @@ function initialize() {
     // }
 
     //path pattern
-    createRandomGoals();
+    // createRandomGoals();
+    createRandomPath();
 
     //create tracker
     //start at the first goal point, move along
@@ -62,42 +63,43 @@ function initialize() {
     t.imgsize = 30;
     t.arrived = false;
     t.reverse = false;
+    t.lookahead = 50; //lookahead distance for predicted
+    t.tolerance = 5; //distance from the path
+    goal = goals[1];
 }
 
 /**
  * Update the tracker
  */
 function loop() {
-    // console.log(t)
     clear();
-    arrive(t);
     if (t.arrived) {
-        goal = [Math.random() * canvas.width, Math.random() * canvas.height];
+        console.log("arrived")
+        // goal = [Math.random() * canvas.width, Math.random() * canvas.height];
         // t.reverse = Math.random() > 0.5;
         t.arrived = false;
 
         goalIndex++;
         if (goalIndex >= goals.length) {
-            goalIndex = 0;
-            dir = !dir;
-            createRandomGoals();
-            t.setPose(goals[0][0], goals[0][1], heading(subtract(goals[0], goals[1])))
+            goalIndex = 1;
+            createRandomPath();
+            r = Math.random() * 200 + 150;
+            theta = Math.random() * Math.PI;
+            t.setPose(goals[0][0] + r * Math.cos(theta), goals[0][1] + r * Math.sin(theta), 0);
+
+            // createRandomGoals();
+            // t.setPose(goals[0][0], goals[0][1], heading(subtract(goals[0], goals[1])))
         }
         goal = goals[goalIndex];
-        // t.x = start[0];
-        // t.y = start[1];
-        // t.theta = 0;
-        // t.reverse = true;
     } else {
-        seek(t)
+        pathFollow(t);
     }
-    drawGoals(c)
+    drawGoals()
     drawTracker(t);
 }
 
 /**
  * Create a random list of goals moving across the width of the canvas
- * @param {*} dir True if left to right, false if right to left 
  */
 function createRandomGoals() {
     step = canvas.width / (steps);
@@ -111,6 +113,23 @@ function createRandomGoals() {
 }
 
 /**
+ * Create a random two point path
+ */
+function createRandomPath() {
+    startX = canvas.width*0.1 + Math.random()*canvas.width*0.1
+    startY = canvas.height*0.1 + Math.random()*canvas.height*0.8
+
+    endX = canvas.width*0.8 + Math.random()*canvas.width*0.1
+    endY = canvas.height*0.1 + Math.random()*canvas.height*0.8
+
+    goals[0] = [startX, startY]
+    goals[1] = [endX, endY]
+
+    goalIndex = 1;
+    goal = goals[goalIndex];
+}
+
+/**
  * Update a Tracker to move towards the target
  * @param {*} t Tracker to update
  */
@@ -119,7 +138,7 @@ function seek(t) {
 
     //delta is difference between target and goal
     delta = subtract(t.xy(), goal);
-    distance = mag(delta); //distance from goal
+    dist = mag(delta); //distance from goal
 
     absAng = heading(delta); //absolute angle to target
     relAng = angleWrap(absAng - (t.theta - Math.PI/2)); //relative angle based on current heading
@@ -129,8 +148,8 @@ function seek(t) {
     relTurn2 = twopi + relTurn;
     
     //relative X and Y from the goal
-    relX = Math.cos(relAng) * distance;
-    relY = Math.sin(relAng) * distance;
+    relX = Math.cos(relAng) * dist;
+    relY = Math.sin(relAng) * dist;
 
     //relative angle
     twist = minMag(relTurn, relTurn2);
@@ -139,30 +158,31 @@ function seek(t) {
     }
 
     //scale linear speed based on twist (ie. turn more & drive less if far away from target)
-    t.speed *= -Math.min(Math.PI/2, Math.abs(twist)) / (Math.PI/2) + 1;
+    // t.speed *= -Math.min(Math.PI/2, Math.abs(twist)) / (Math.PI/2) + 1; //zero at 90+ degrees
     if (t.reverse) {
         t.speed = -Math.abs(t.speed); //negative speed if reversing
     }
 
     turnConst = 0.09; //change the angle based on how much the change in angle is needed
-    t.theta += Math.sign(twist) * Math.min(t.maxAng, turnConst * Math.abs(twist)); //limit to maximum turn rate
+    t.ang = Math.sign(twist) * Math.min(t.maxAng, turnConst * Math.abs(twist))
+    t.theta += t.ang; //limit to maximum turn rate
     t.step();
 }
 
 /**
- * Slow a Tracker down based on how far it is from the goal
+ * Slow a Tracker down based on how far it is from the goal. Scales and sets outputs, does not actually move
+ * the Tracker.
  * @param {*} t Tracker to adjust
  */
 function arrive(t) {
     //distance away from goal and finish distance
-    goalDist = 50;
-    endDist = 3;
+    goalDist = t.lookahead;
+    endDist = 5;
 
-    if (isWithinBounds(t.xy(), goal, goalDist)) { //if in ramping zone
+    if (isWithinBounds(t.xy(), goal, goalDist)) { //if in ramping zone of END point
         dist = mag(subtract(goal, t.xy()));
         scale = dist < endDist ? 0 : dist / goalDist;
         t.speed = t.maxLin * scale; //ramp down linearly
-        t.ang = dist < endDist ? 0 : t.ang;
         t.arrived = dist < endDist;
 
     } else { //anywhere else
@@ -171,12 +191,89 @@ function arrive(t) {
     }
 }
 
+/**
+ * Follow a path using the path following behaviour
+ * @param {*} t Tracker
+ */
+function pathFollow(t) {
+    //Predicted position a fixed distance away in the same direction as the Tracker
+    // t.predicted = add(t.xy(), setMag(t.velVector(), t.lookahead)); 
+
+    //Predicted position in same direction as Tracker varying by speed 
+    t.predicted = add(t.xy(), setMag(t.velVector(), t.speed * 15))
+
+    //start and end points of segment
+    start = goals[0];
+    end = goals[1];
+
+    //from start to predicted
+    A = subtract(start, t.predicted);
+    B = subtract(start, end);
+
+    //point on path normal to predicted point
+    t.normal = add(start, setMag(B, dot(A, normalize(B))));
+
+    distFromPath = distance(t.predicted, t.normal);
+    //Track the end goal if the distance to the end goal is less than 
+    //  the lookahead plus a factor based on the speed ('look' further if going faster)
+    if (distance(t.xy(), end) < t.lookahead + t.speed * 10) {
+        goal = end; //set to end point if close enough
+        arrive(t); //scale output
+        seek(t); //seek the final target
+
+    //Too far off the path, need to steer to it
+    //Could possibly change this to account for size of the relative angle to the target
+    //  ie. should steer towards path if on path but 90deg away from target
+    } else if (distFromPath > t.tolerance) {
+        //set target further from normal based on distance from the path
+        goal = add(t.normal, setMag(B, distFromPath * 1.2));
+        seek(t); //seek target
+
+    //On path, moving fine
+    } else {
+        goal = t.normal; //goal is point further ahead (don't necessarily need to set this, can just move ahead)
+        t.speed = t.maxLin //set max speed
+        t.step(); //just keep moving forward 
+    }
+}
+
 //Utility
 
 /**
+ * Return the dot product of two vectors
+ * @param {*} a First vector
+ * @param {*} b Second vector
+ * @returns Scalar product of a and b
+ */
+function dot(a, b) {
+    return a[0] * b[0] + a[1] * b[1];
+}
+
+/**
+ * Returns the normalized vector
+ * @param {*} a Vector to normalize
+ * @returns Unit vector in a's direction
+ */
+function normalize(a) {
+    magnitude = mag(a);
+    return [a[0]/magnitude, a[1]/magnitude];
+}
+
+/**
+ * Return the absolute distance between two vectors
+ * @param {*} a First vector
+ * @param {*} b Second vector
+ * @returns Magnitude of difference between a and b
+ */
+function distance(a, b) {
+    return mag(subtract(a,b));
+}
+
+/**
  * Return the number with the minimum magnitude
- * @param {*} a 
- * @param {*} b 
+ * @param {*} a First number
+ * @param {*} b Second number
+ * @returns Number closest to zero
  */
 function minMag(a, b) {
     return Math.abs(a) < Math.abs(b) ? a : b;
@@ -302,10 +399,10 @@ function add(v1, v2) {
  * @param {*} x X value for center of circle
  * @param {*} y Y value for center of circle
  */
-function drawPoint(x, y, color) {
+function drawPoint(x, y, color, rad=10) {
     c.fillStyle = color
     c.beginPath();
-    c.arc(x, y, 10, 0, 2 * Math.PI);
+    c.arc(x, y, rad, 0, 2 * Math.PI);
     c.fill();
 }
 
@@ -322,6 +419,21 @@ function clear() {
  * @param {*} t Tracker to draw
  */
 function drawTracker(t) {
+    //draw goal
+    drawPoint(goal[0], goal[1], "green", 5);
+    c.strokeStyle = "green";
+    drawLine(t.x, t.y, goal[0], goal[1]) //line from robot to goal
+
+    //draw normal
+    drawPoint(t.normal[0], t.normal[1], "blue", 5);
+
+    //draw lookahead
+    c.strokeStyle = "blue"
+    drawLine(t.x, t.y, t.predicted[0], t.predicted[1]);
+    drawPoint(t.predicted[0], t.predicted[1], "blue", 5);
+    drawLine(t.normal[0], t.normal[1], t.predicted[0], t.predicted[1]);
+
+    //draw Tracker
     half = t.imgsize / 2;
     c.save();
     c.translate(t.x, t.y);
@@ -330,14 +442,28 @@ function drawTracker(t) {
     c.restore();
 }
 
-function drawLine(c, x1, y1, x2, y2) {
+/**
+ * Draw a line between two points
+ * @param {*} x1 X of first point
+ * @param {*} y1 Y of first point
+ * @param {*} x2 X of second point
+ * @param {*} y2 Y of second point
+ */
+function drawLine(x1, y1, x2, y2) {
     c.beginPath()
     c.moveTo(x1, y1);
     c.lineTo(x2, y2);
     c.stroke();
 }
 
-function drawGoals(c) {
+/**
+ * Draw the goals and lines connecting them
+ */
+function drawGoals() {
+    //draw path
+    c.fillStyle = "gray";
+    c.lineWidth = 2;
+
     //draw lines
     c.strokeStyle = "red";
     c.lineWidth = 3;
@@ -350,7 +476,7 @@ function drawGoals(c) {
 
     //draw points
     for (i = 0; i < goals.length; i++) {
-        drawPoint(goals[i][0], goals[i][1], "red");
+        drawPoint(goals[i][0], goals[i][1], "red", 7);
     }
 }
 
