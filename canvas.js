@@ -92,7 +92,7 @@ function loop() {
  * Create a random list of goals moving across the width of the canvas
  */
 function createRandomGoals() {
-    steps = Math.random() * 5 + 2
+    steps = 8
     step = canvas.width / steps;
     goals = []
     
