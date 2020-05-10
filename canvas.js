@@ -38,18 +38,6 @@ function initialize() {
     canvas.height = window.innerHeight * winScale;
     c = canvas.getContext('2d');
 
-    //create goals
-    goals = []
-    steps = 9;
-    dir = true;
-
-    //radial pattern
-    // r = 200
-    // step = 2*Math.PI / steps;
-    // for (i = 0; i < steps; i++) {
-    //     goals[i] = [start[0] + r * Math.cos(step * i), start[1] + r * Math.sin(step * i)]
-    // }
-
     //path pattern
     createRandomGoals();
     // createRandomPath();
@@ -104,11 +92,13 @@ function loop() {
  * Create a random list of goals moving across the width of the canvas
  */
 function createRandomGoals() {
-    steps = 3
-    step = canvas.width / (steps);
+    steps = Math.random() * 5 + 2
+    step = canvas.width / steps;
+    goals = []
     
     for (i = 0; i < steps; i++) {
-        goals[i] = [(i+0.5) * step, Math.random() * 200 + 400]
+        goals[i] = [(i+0.5) * step, Math.random() * 100 + canvas.height * 0.45]
+        // goals[i] = [(i+0.5) * step, Math.random() * canvas.height]
     }
 
     goalIndex = 0;
@@ -200,13 +190,13 @@ function arrive(t) {
  */
 function pathFollow(t) {
     //Predicted position a fixed distance away in the same direction as the Tracker
-    // t.predicted = add(t.xy(), setMag(t.velVector(), t.lookahead)); 
+    t.predicted = add(t.xy(), setMag(t.velVector(), t.lookahead)); 
 
     //Predicted position in same direction as Tracker varying by speed 
     //By using speed, the predicted point could represent where the Tracker is after 
     // a certain time has passed (ie. where will the Tracker be if it maintains the same
     // speed and heading for 0.25s)
-    t.predicted = add(t.xy(), setMag(t.velVector(), t.speed * 15))
+    // t.predicted = add(t.xy(), setMag(t.velVector(), t.speed * 15))
 
     //Loop through all the points and find the closest normal point
     normals = [] //collection of normals to the path
@@ -221,8 +211,8 @@ function pathFollow(t) {
         //This ensures the path is followed even if the normals are off the path
         if (!pointOnLine(normals[i], goals[i],  goals[i+1], 1)) {
             normals[i] = goals[i+1];
-            col = i == 0 ? "blue" : "green"
-            console.log("normal ", col, " is off of line")
+            // col = i == 0 ? "blue" : "green"
+            // console.log("normal ", col, " is off of line")
         } 
     }
 
@@ -506,23 +496,23 @@ function clear() {
  */
 function drawTracker(t) {
     // //draw goal
-    // drawPoint(goal[0], goal[1], "green", 5);
-    // c.strokeStyle = "green";
-    // drawLine(t.x, t.y, goal[0], goal[1]) //line from robot to goal
+    drawPoint(goal[0], goal[1], "green", 5);
+    c.strokeStyle = "green";
+    drawLine(t.x, t.y, goal[0], goal[1]) //line from robot to goal
 
-    //draw normal
+    //draw all the normal points, line from predicted
     for (i = 0; i < normals.length; i++) {
         c.strokeStyle = "blue"
-        // drawLine(t.predicted[0], t.predicted[1], normals[i][0], normals[i][1])
-        drawPoint(normals[i][0], normals[i][1], i == 0 ? "blue" : "green", 5)
+        c.lineWidth = 1
+        drawLine(t.predicted[0], t.predicted[1], normals[i][0], normals[i][1])
+        drawPoint(normals[i][0], normals[i][1], "blue", 3)
     }
-    // drawPoint(t.normal[0], t.normal[1], "blue", 5);
 
     //draw lookahead
-    // c.strokeStyle = "blue"
-    // drawLine(t.x, t.y, t.predicted[0], t.predicted[1]);
-    // drawPoint(t.predicted[0], t.predicted[1], "blue", 5);
-    // drawLine(t.normal[0], t.normal[1], t.predicted[0], t.predicted[1]);
+    c.strokeStyle = "grey"
+    drawLine(t.x, t.y, t.predicted[0], t.predicted[1]);
+    drawPoint(t.predicted[0], t.predicted[1], "grey", 5);
+    drawLine(t.normal[0], t.normal[1], t.predicted[0], t.predicted[1]);
 
     //draw Tracker
     half = t.imgsize / 2;
@@ -556,7 +546,7 @@ function drawGoals() {
     c.lineWidth = 2;
 
     //draw lines
-    c.strokeStyle = "red";
+    c.strokeStyle = "black";
     c.lineWidth = 3;
     c.beginPath();
     c.moveTo(goals[0][0], goals[0][1]);
@@ -567,7 +557,7 @@ function drawGoals() {
 
     //draw points
     for (i = 0; i < goals.length; i++) {
-        drawPoint(goals[i][0], goals[i][1], "red", 7);
+        drawPoint(goals[i][0], goals[i][1], "black", 7);
     }
 }
 
