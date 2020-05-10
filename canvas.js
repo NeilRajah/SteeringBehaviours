@@ -51,19 +51,24 @@ function initialize() {
     // }
 
     //path pattern
-    // createRandomGoals();
-    createRandomPath();
+    createRandomGoals();
+    // createRandomPath();
 
     //create tracker
     //start at the first goal point, move along
     t = new Tracker(goals[0][0], goals[0][1], heading(subtract(goals[0], goals[1])));
+    // r = Math.random() * 10 + 10;
+    r = 0
+    theta = heading(subtract(goals[0], goals[1]))
+    t.setPose(goals[0][0] + r * Math.cos(theta), goals[0][1] + r * Math.sin(theta), theta);
+
     img = new Image();
     img.src = "https://tinyurl.com/y99qsysr";
     t.img = img;
     t.imgsize = 30;
     t.arrived = false;
     t.reverse = false;
-    t.lookahead = 50; //lookahead distance for predicted
+    t.lookahead = 20; //lookahead distance for predicted
     t.tolerance = 5; //distance from the path
     goal = goals[1];
 }
@@ -74,20 +79,17 @@ function initialize() {
 function loop() {
     clear();
     if (t.arrived) {
-        console.log("arrived")
-        // goal = [Math.random() * canvas.width, Math.random() * canvas.height];
-        // t.reverse = Math.random() > 0.5;
         t.arrived = false;
 
         goalIndex++;
         if (goalIndex >= goals.length) {
-            goalIndex = 1;
-            createRandomPath();
-            r = Math.random() * 200 + 150;
+            goalIndex = 0;
+            // createRandomPath();
+            r = Math.random() * 10 + 10;
             theta = Math.random() * Math.PI;
             t.setPose(goals[0][0] + r * Math.cos(theta), goals[0][1] + r * Math.sin(theta), 0);
 
-            // createRandomGoals();
+            createRandomGoals();
             // t.setPose(goals[0][0], goals[0][1], heading(subtract(goals[0], goals[1])))
         }
         goal = goals[goalIndex];
@@ -102,10 +104,11 @@ function loop() {
  * Create a random list of goals moving across the width of the canvas
  */
 function createRandomGoals() {
+    steps = 3
     step = canvas.width / (steps);
     
-    for (i = 0; i < steps-1; i++) {
-        goals[i] = [(i+1) * step, Math.random() * canvas.height]
+    for (i = 0; i < steps; i++) {
+        goals[i] = [(i+0.5) * step, Math.random() * 200 + 400]
     }
 
     goalIndex = 0;
@@ -176,7 +179,7 @@ function seek(t) {
  */
 function arrive(t) {
     //distance away from goal and finish distance
-    goalDist = t.lookahead;
+    goalDist = t.lookahead + t.speed * 10;
     endDist = 5;
 
     if (isWithinBounds(t.xy(), goal, goalDist)) { //if in ramping zone of END point
@@ -200,18 +203,52 @@ function pathFollow(t) {
     // t.predicted = add(t.xy(), setMag(t.velVector(), t.lookahead)); 
 
     //Predicted position in same direction as Tracker varying by speed 
+    //By using speed, the predicted point could represent where the Tracker is after 
+    // a certain time has passed (ie. where will the Tracker be if it maintains the same
+    // speed and heading for 0.25s)
     t.predicted = add(t.xy(), setMag(t.velVector(), t.speed * 15))
 
-    //start and end points of segment
-    start = goals[0];
-    end = goals[1];
+    //Loop through all the points and find the closest normal point
+    normals = [] //collection of normals to the path
+    minDist = 100000000000; //distance of closest normal 
+    record = 0; //index of closest normal
 
-    //from start to predicted
-    A = subtract(start, t.predicted);
-    B = subtract(start, end);
+    for (i = 0; i < goals.length-1; i++) {
+        //start and end points for line segment
+        start = goals[i];
+        end = goals[i+1];
 
-    //point on path normal to predicted point
-    t.normal = add(start, setMag(B, dot(A, normalize(B))));
+        //normal point from predicted to that line segment
+        //Using an array for graphics, could go back to single point (ie. just normal)
+        normals[i] = getNormalPoint(t.predicted, start, end);
+
+        //distance from that normal point
+        dist = distsq(t.predicted, normals[i]); //using distance squared to be faster
+        if (dist < minDist) {
+            minDist = dist;
+            record = i
+            // if (pointOnLine(normals[i], start, end, 0.01)) {
+            //     t.normal = normals[i];
+            // } else {
+            // }
+
+            if (!pointOnLine(normals[i], start, end, 0.1)) {
+                normals[i] = end;
+            }
+            // t.normal = normals[i];
+        }
+    }
+
+    t.normal = normals[record]
+    //if no normal was chosen
+    //   choose closest point (not normal, point in the paths list)?
+    //   choose the closest normal?
+    if (!t.normal) {
+        // console.log("normal wasn't chosen")
+        // t.normal = goals[record]
+    }
+
+    console.log(pointOnLine(t.normal, start, end, 0.001))
 
     distFromPath = distance(t.predicted, t.normal);
     //Track the end goal if the distance to the end goal is less than 
@@ -226,7 +263,9 @@ function pathFollow(t) {
     //  ie. should steer towards path if on path but 90deg away from target
     } else if (distFromPath > t.tolerance) {
         //set target further from normal based on distance from the path
-        goal = add(t.normal, setMag(B, distFromPath * 1.2));
+        // goal = add(t.normal, setMag(B, distFromPath * 1.2));
+        goal = t.normal //just the normal point
+        console.log(record)
         seek(t); //seek target
 
     //On path, moving fine
@@ -238,6 +277,63 @@ function pathFollow(t) {
 }
 
 //Utility
+
+/**
+ * Return whether a point is on a line within a tolerance
+ * @param {*} p Point to check
+ * @param {*} a First point of line segment
+ * @param {*} b Second point of line segment
+ * @param {*} epsilon Distance to be within to be considered 'on the line'
+ * @returns True if p is close enough to ab, false if not
+ */
+function pointOnLine(p, a, b, epsilon=0.001) {
+    //Avoiding use square roots to be faster
+    return fuzzEq(distsq(a,b), 2 * (distsq(a,p) + distsq(b,p)), epsilon)
+}
+
+/**
+ * Return if two numbers are close enough to each other
+ * @param {*} m First number
+ * @param {*} n Second number
+ * @param {*} eps Acceptable error to be true
+ * @returns True if absolute difference is less than eps, false if not
+ */
+function fuzzEq(m, n, eps=0.001) {
+    return Math.abs(m-n) < eps
+}
+
+/**
+ * Returns the distance squared between two vectors (for fast calculations)
+ * @param {*} a First vector
+ * @param {*} b Second vector
+ * @returns Sum of squares of component differences
+ */
+function distsq(a, b) {
+    return magsq(subtract(a,b))
+}
+
+/**
+ * Return the square of the magnitude of the vector (for fast calculations)
+ * @param {*} a  Vector
+ * @returns Sum of squares of components
+ */
+function magsq(a) {
+    return a[0]*a[0] + a[1]*a[1]
+}
+
+/**
+ * Returns the normal point of one vector relative to a line segment of two vectors
+ * @param {*} p Vector off of line
+ * @param {*} a Start of line segment
+ * @param {*} b End of line segment
+ * @returns (x,y) of normal point
+ */
+function getNormalPoint(p, a, b) {
+    //a is start, b is end, p is predicted
+    A = subtract(a, p);
+    B = subtract(a, b);
+    return add(a, setMag(B, dot(A, normalize(B))));
+}
 
 /**
  * Return the dot product of two vectors
@@ -419,19 +515,24 @@ function clear() {
  * @param {*} t Tracker to draw
  */
 function drawTracker(t) {
-    //draw goal
+    // //draw goal
     drawPoint(goal[0], goal[1], "green", 5);
     c.strokeStyle = "green";
     drawLine(t.x, t.y, goal[0], goal[1]) //line from robot to goal
 
     //draw normal
-    drawPoint(t.normal[0], t.normal[1], "blue", 5);
+    // for (i = 0; i < normals.length; i++) {
+    //     c.strokeStyle = "blue"
+    //     drawLine(t.predicted[0], t.predicted[1], normals[i][0], normals[i][1])
+    //     drawPoint(normals[i][0], normals[i][1], "blue", 3)
+    // }
+    // drawPoint(t.normal[0], t.normal[1], "blue", 5);
 
     //draw lookahead
     c.strokeStyle = "blue"
-    drawLine(t.x, t.y, t.predicted[0], t.predicted[1]);
-    drawPoint(t.predicted[0], t.predicted[1], "blue", 5);
-    drawLine(t.normal[0], t.normal[1], t.predicted[0], t.predicted[1]);
+    // drawLine(t.x, t.y, t.predicted[0], t.predicted[1]);
+    // drawPoint(t.predicted[0], t.predicted[1], "blue", 5);
+    // drawLine(t.normal[0], t.normal[1], t.predicted[0], t.predicted[1]);
 
     //draw Tracker
     half = t.imgsize / 2;
