@@ -68,7 +68,7 @@ function initialize() {
     t.imgsize = 30;
     t.arrived = false;
     t.reverse = false;
-    t.lookahead = 20; //lookahead distance for predicted
+    t.lookahead = 100; //lookahead distance for predicted
     t.tolerance = 5; //distance from the path
     goal = goals[1];
 }
@@ -179,7 +179,7 @@ function seek(t) {
  */
 function arrive(t) {
     //distance away from goal and finish distance
-    goalDist = t.lookahead + t.speed * 10;
+    goalDist = Math.min(t.lookahead + t.speed * 10, 50);
     endDist = 5;
 
     if (isWithinBounds(t.xy(), goal, goalDist)) { //if in ramping zone of END point
@@ -210,51 +210,42 @@ function pathFollow(t) {
 
     //Loop through all the points and find the closest normal point
     normals = [] //collection of normals to the path
+
+    //get all the normals
+    for (i = 0; i < goals.length-1; i++) {
+        //normal point from predicted to that line segment
+        //Using an array for graphics, could go back to single point (ie. just normal)
+        normals[i] = getNormalPoint(t.predicted, goals[i], goals[i+1]);
+
+        //If the normal point is not on the line, set the normal point to the end point
+        //This ensures the path is followed even if the normals are off the path
+        if (!pointOnLine(normals[i], goals[i],  goals[i+1], 1)) {
+            normals[i] = goals[i+1];
+            col = i == 0 ? "blue" : "green"
+            console.log("normal ", col, " is off of line")
+        } 
+    }
+
+    // console.log(normals[0], goals[0], goals[1]);
+
+    //choose the closest normal    
     minDist = 100000000000; //distance of closest normal 
     record = 0; //index of closest normal
 
-    for (i = 0; i < goals.length-1; i++) {
-        //start and end points for line segment
-        start = goals[i];
-        end = goals[i+1];
-
-        //normal point from predicted to that line segment
-        //Using an array for graphics, could go back to single point (ie. just normal)
-        normals[i] = getNormalPoint(t.predicted, start, end);
-
-        //distance from that normal point
-        dist = distsq(t.predicted, normals[i]); //using distance squared to be faster
+    for (i = 0; i < normals.length; i++) {
+        dist = distsq(t.predicted, normals[i]);
         if (dist < minDist) {
-            minDist = dist;
+            minDist = dist
             record = i
-            // if (pointOnLine(normals[i], start, end, 0.01)) {
-            //     t.normal = normals[i];
-            // } else {
-            // }
-
-            if (!pointOnLine(normals[i], start, end, 0.1)) {
-                normals[i] = end;
-            }
-            // t.normal = normals[i];
         }
     }
-
     t.normal = normals[record]
-    //if no normal was chosen
-    //   choose closest point (not normal, point in the paths list)?
-    //   choose the closest normal?
-    if (!t.normal) {
-        // console.log("normal wasn't chosen")
-        // t.normal = goals[record]
-    }
-
-    console.log(pointOnLine(t.normal, start, end, 0.001))
 
     distFromPath = distance(t.predicted, t.normal);
     //Track the end goal if the distance to the end goal is less than 
     //  the lookahead plus a factor based on the speed ('look' further if going faster)
-    if (distance(t.xy(), end) < t.lookahead + t.speed * 10) {
-        goal = end; //set to end point if close enough
+    if (distance(t.xy(), goals[goals.length-1]) < t.lookahead + t.speed * 10) {
+        goal = goals[goals.length-1]; //set to end point if close enough
         arrive(t); //scale output
         seek(t); //seek the final target
 
@@ -265,7 +256,6 @@ function pathFollow(t) {
         //set target further from normal based on distance from the path
         // goal = add(t.normal, setMag(B, distFromPath * 1.2));
         goal = t.normal //just the normal point
-        console.log(record)
         seek(t); //seek target
 
     //On path, moving fine
@@ -288,7 +278,7 @@ function pathFollow(t) {
  */
 function pointOnLine(p, a, b, epsilon=0.001) {
     //Avoiding use square roots to be faster
-    return fuzzEq(distsq(a,b), 2 * (distsq(a,p) + distsq(b,p)), epsilon)
+    return fuzzEq(distance(a,b), distance(a,p) + distance(b,p), epsilon)
 }
 
 /**
@@ -516,20 +506,20 @@ function clear() {
  */
 function drawTracker(t) {
     // //draw goal
-    drawPoint(goal[0], goal[1], "green", 5);
-    c.strokeStyle = "green";
-    drawLine(t.x, t.y, goal[0], goal[1]) //line from robot to goal
+    // drawPoint(goal[0], goal[1], "green", 5);
+    // c.strokeStyle = "green";
+    // drawLine(t.x, t.y, goal[0], goal[1]) //line from robot to goal
 
     //draw normal
-    // for (i = 0; i < normals.length; i++) {
-    //     c.strokeStyle = "blue"
-    //     drawLine(t.predicted[0], t.predicted[1], normals[i][0], normals[i][1])
-    //     drawPoint(normals[i][0], normals[i][1], "blue", 3)
-    // }
+    for (i = 0; i < normals.length; i++) {
+        c.strokeStyle = "blue"
+        // drawLine(t.predicted[0], t.predicted[1], normals[i][0], normals[i][1])
+        drawPoint(normals[i][0], normals[i][1], i == 0 ? "blue" : "green", 5)
+    }
     // drawPoint(t.normal[0], t.normal[1], "blue", 5);
 
     //draw lookahead
-    c.strokeStyle = "blue"
+    // c.strokeStyle = "blue"
     // drawLine(t.x, t.y, t.predicted[0], t.predicted[1]);
     // drawPoint(t.predicted[0], t.predicted[1], "blue", 5);
     // drawLine(t.normal[0], t.normal[1], t.predicted[0], t.predicted[1]);
@@ -581,5 +571,6 @@ function drawGoals() {
     }
 }
 
+console.log(pointOnLine([5,5], [0,0], [10,10], 1.0))
 initialize();
 main();
