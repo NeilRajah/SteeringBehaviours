@@ -10,21 +10,15 @@
  var c; //canvas context for drawing
  var t; //Tracker
  var goal; //goal point
- var goals;
- var goalIndex;
- var dir;
+ var goals; //all the current goal points
+ var goalIndex; //index of the goal in goals
 
-
- /**
-  * Create the canvas and run the main loop
-  */
-function main() {
-    //update goal on mouse move
-    // window.addEventListener('mousemove', function (e) {
-    //     offset = 10
-    //     goal = [e.x - offset, e.y - offset];
-    // });
-    this.interval = setInterval(loop, 1000/50) //run loop periodically
+window.onload = function() {
+    //set up the file chooser
+    fileChooser = document.createElement('input'); //create element in DOM
+    fileChooser.type = "file"; //set to select files
+    fileChooser.accept = ".prstpath"; //only accept pursuit path files
+    fileChooser.style.display = "none"; //make invisible
 }
 
 /**
@@ -40,73 +34,68 @@ function initialize() {
 
     //path pattern
     createRandomGoals();
-    // createRandomPath();
 
-    //create tracker
-    //start at the first goal point, move along
+    //create tracker starting at the first goal point
     t = new Tracker(goals[0][0], goals[0][1], heading(subtract(goals[0], goals[1])));
-    // r = Math.random() * 10 + 10;
-    r = 0
-    theta = heading(subtract(goals[0], goals[1]))
-    t.setPose(goals[0][0] + r * Math.cos(theta), goals[0][1] + r * Math.sin(theta), theta);
+    theta = heading(subtract(goals[0], goals[1])) //point towards first point
+    t.setPose(goals[0][0], goals[0][1], theta);
 
     img = new Image();
     img.src = "https://tinyurl.com/y99qsysr";
     t.img = img;
     t.imgsize = 30;
-    t.arrived = false;
-    t.reverse = false;
-    t.lookahead = Math.max(bump / 35, 20); //lookahead distance for next point; based on path bumpiness now
+    t.arrived = false; //whether the Tracker has arrived at the final point
+    t.reverse = false; //whether the Tracker is following in reverse
+    t.lookahead = Math.max(bump / 20, 20); //lookahead distance for next point; based on path bumpiness now
     t.tolerance = 5; //distance from the path
-    goal = goals[0];
-    t.lastIndex = 0;
+    t.lastIndex = 0; //speed purposes
+    goal = goals[0]; //the current goal is the first goal in the list
 }
 
 /**
- * Update the tracker
+ * Update the tracker, following a finite state machine style
  */
 function loop() {
-    clear();
     if (t.arrived) {
-        t.arrived = false;
-
-        goalIndex++;
-        if (goalIndex >= goals.length) {
-            reset(t);
-            // t.setPose(goals[0][0], goals[0][1], heading(subtract(goals[0], goals[1])))
-        }
-        goal = goals[goalIndex];
+        reset(t)
     } else {
-        // pathFollow(t);
-        purePursuit(t);
+        // pathFollow();
+        purePursuit();
     }
+    clear();
     drawGoals()
     drawTracker(t);
 }
 
+/**
+ * Reset the Tracker after following a target
+ * @param {*} t Tracker
+ */
 function reset(t) {
+    t.arrived = false;
     goalIndex = 0;
-    // createRandomPath();
+
+    //create random goals for the Tracker to follow
+    createRandomGoals();
+
+    //give random position away from first point
     r = Math.random() * 10 + 10;
     theta = Math.random() * Math.PI;
     t.setPose(goals[0][0] + r * Math.cos(theta), goals[0][1] + r * Math.sin(theta), 0);
     t.lastIndex = 0;
-
-    createRandomGoals();
 }
 
 /**
  * Create a random list of goals moving across the width of the canvas
  */
 function createRandomGoals() {
-    steps = 20
+    steps = 8
     step = canvas.width / steps;
     goals = []
     bump = Math.random() * 800 //larger bump = larger avg. y difference between points
     
     for (i = 0; i < steps; i++) {
         goals[i] = [(i+0.5) * step, Math.random() * bump + canvas.height/2 - bump/2]
-        // goals[i] = [(i+0.5) * step, Math.random() * canvas.height]
     }
 
     goalIndex = 0;
@@ -132,11 +121,8 @@ function createRandomPath() {
 
 /**
  * Update a Tracker to move towards the target
- * @param {*} t Tracker to update
  */
-function seek(t) {
-    twopi = Math.PI * 2;
-
+function seek() {
     //delta is difference between target and goal
     delta = subtract(t.xy(), goal);
     dist = mag(delta); //distance from goal
@@ -146,7 +132,7 @@ function seek(t) {
 
     //two angles, CW and CCW
     relTurn = relAng - Math.PI/2;
-    relTurn2 = twopi + relTurn;
+    relTurn2 = 2*Math.PI + relTurn;
     
     //relative X and Y from the goal
     relX = Math.cos(relAng) * dist;
@@ -173,9 +159,8 @@ function seek(t) {
 /**
  * Slow a Tracker down based on how far it is from the goal. Scales and sets outputs, does not actually move
  * the Tracker.
- * @param {*} t Tracker to adjust
  */
-function arrive(t) {
+function arrive() {
     //distance away from goal and finish distance
     goalDist = Math.min(t.lookahead + t.speed * 10, 50);
     endDist = t.lookahead/2;
@@ -194,9 +179,8 @@ function arrive(t) {
 
 /**
  * Follow a path using the path following behaviour
- * @param {*} t Tracker
  */
-function pathFollow(t) {
+function pathFollow() {
     //Predicted position a fixed distance away in the same direction as the Tracker
     t.predicted = add(t.xy(), setMag(t.velVector(), t.lookahead)); 
 
@@ -242,8 +226,8 @@ function pathFollow(t) {
     //  the lookahead plus a factor based on the speed ('look' further if going faster)
     if (distance(t.xy(), goals[goals.length-1]) < t.lookahead + t.speed * 10) {
         goal = goals[goals.length-1]; //set to end point if close enough
-        arrive(t); //scale output
-        seek(t); //seek the final target
+        arrive(); //scale output
+        seek(); //seek the final target
 
     //Too far off the path, need to steer to it
     //Could possibly change this to account for size of the relative angle to the target
@@ -253,7 +237,7 @@ function pathFollow(t) {
         // goal = add(t.normal, setMag(B, distFromPath * 1.2));
 
         goal = t.normal //just the normal point
-        seek(t); //seek target
+        seek(); //seek target
 
     //On path, moving fine
     } else {
@@ -263,7 +247,10 @@ function pathFollow(t) {
     }
 }
 
-function purePursuit(t) {
+/**
+ * Follow the goal points using the Pure Pursuit algorithm
+ */
+function purePursuit() {
     //find the closest point
     minDist = 100000000
     record = t.lastIndex
@@ -284,40 +271,33 @@ function purePursuit(t) {
     for (i = 0; i < goals.length-1; i++) {
         intersects = intersects.concat(lcIntersect(goals[i], goals[i+1], t.xy(), t.lookahead));
     }
-
-    //draw intersects
-    for (i = 0; i < intersects.length; i++) {
-        drawPoint(intersects[i][0], intersects[i][1], "green", Math.max(5, t.lookahead/10))
-    }
     
     //if there are no intersects, choose the closest point to the Tracker
+    //Could potentially be closest + some distance along the path
     if (intersects.length == 0) {
-        // t.target = goals[Math.min(record+1, goals.length)] //could potentially be closest + some distance along the path
+        // t.target = goals[Math.min(record+1, goals.length)] 
         t.target = t.closest
-        // console.log("no intersects")
+
     //if there are intersects, choose the last one added
+    //Could change to point with both minDist, minDistAlongPath
     } else {
         t.target = intersects[Math.max(0, intersects.length-1)]
-        // console.log("intersects")
     }
     goal = t.target
 
     //set the speed
     t.speed = t.maxLin
 
-    // if (intersects.length == 0) {
-    //     console.log(intersects.length, t.xy(), goals[goals.length-1], goal)
-    // }
-
     //set the goal to the last point if closer to the goal
     if (goal) {
         if (distance(t.xy(), goals[goals.length-1]) < distance(t.xy(), goal)) {
             goal = goals[goals.length-1]; //set to end point if close enough
-            arrive(t); //scale output
+            arrive(); //scale output
         }
     }
     
-    seek(t)
+    //seek the target
+    seek()
 }
 
 //Graphics
@@ -347,32 +327,18 @@ function clear() {
  * @param {*} t Tracker to draw
  */
 function drawTracker(t) {
-    // //draw all the normal points, line from predicted
-    // for (i = 0; i < normals.length; i++) {
-    //     c.strokeStyle = "blue"
-    //     c.lineWidth = 1
-    //     drawLine(t.predicted[0], t.predicted[1], normals[i][0], normals[i][1])
-    //     drawPoint(normals[i][0], normals[i][1], "blue", 3)
-    // }
-
-    // //draw lookahead
-    // c.strokeStyle = "grey"
-    // drawLine(t.x, t.y, t.predicted[0], t.predicted[1]);
-    // drawPoint(t.predicted[0], t.predicted[1], "grey", 5);
-    // drawLine(t.normal[0], t.normal[1], t.predicted[0], t.predicted[1]);
-
-    //draw closest
-    // if (t.closest) {
-    //     drawPoint(t.closest[0], t.closest[1], "red");
-    //     c.strokeStyle = "red"
-    //     drawLine(t.x, t.y, t.closest[0], t.closest[1]);
-    // }
-
     //draw the lookahead circle
     c.strokeStyle = "black"
     c.beginPath();
     c.arc(t.x, t.y, t.lookahead, 0, 2*Math.PI);
     c.stroke();
+
+    //draw intersects
+    if (intersects) {
+        for (i = 0; i < intersects.length; i++) {
+            drawPoint(intersects[i][0], intersects[i][1], "green", Math.max(5, t.lookahead/10))
+        }
+    }
 
     //draw the target
     if (t.target) {
@@ -431,262 +397,6 @@ function drawGoals() {
     }
 }
 
-//Utility
-
-function lcIntersect(E, L, C, r) {
-    // console.log("here")
-    d = subtract(E, L);
-    f = subtract(C, E);
-
-    a = dot(d, d);
-    b = 2 * dot(f, d);
-    u = dot(f, f) - r*r;
-    disc = b*b - 4*a*u;
-
-    if (disc < 0) {return []};
-
-    disc = Math.sqrt(disc);
-    t1 = (-b - disc) / (2*a);
-    t2 = (-b + disc) / (2*a);
-
-    intersects = [];
-
-    //calculate the points
-    //if they are on the line segment, add them
-    p1 = add(E, scale(d, t1))
-    p2 = add(E, scale(d, t2))
-
-    if (pointOnLine(p1, E, L)) {
-        intersects.push(p1);
-    } 
-    if (pointOnLine(p2, E, L)) {
-        intersects.push(p2);
-    }
-    return intersects;
-}
-
-/**
- * Return whether a point is on a line within a tolerance
- * @param {*} p Point to check
- * @param {*} a First point of line segment
- * @param {*} b Second point of line segment
- * @param {*} epsilon Distance to be within to be considered 'on the line'
- * @returns True if p is close enough to ab, false if not
- */
-function pointOnLine(p, a, b, epsilon=0.001) {
-    //Avoiding use square roots to be faster
-    return fuzzEq(distance(a,b), distance(a,p) + distance(b,p), epsilon)
-}
-
-/**
- * Return if two numbers are close enough to each other
- * @param {*} m First number
- * @param {*} n Second number
- * @param {*} eps Acceptable error to be true
- * @returns True if absolute difference is less than eps, false if not
- */
-function fuzzEq(m, n, eps=0.001) {
-    return Math.abs(m-n) < eps
-}
-
-/**
- * Returns the distance squared between two vectors (for fast calculations)
- * @param {*} a First vector
- * @param {*} b Second vector
- * @returns Sum of squares of component differences
- */
-function distsq(a, b) {
-    return magsq(subtract(a,b))
-}
-
-/**
- * Return the square of the magnitude of the vector (for fast calculations)
- * @param {*} a  Vector
- * @returns Sum of squares of components
- */
-function magsq(a) {
-    return a[0]*a[0] + a[1]*a[1]
-}
-
-/**
- * Returns the normal point of one vector relative to a line segment of two vectors
- * @param {*} p Vector off of line
- * @param {*} a Start of line segment
- * @param {*} b End of line segment
- * @returns (x,y) of normal point
- */
-function getNormalPoint(p, a, b) {
-    //a is start, b is end, p is predicted
-    A = subtract(a, p);
-    B = subtract(a, b);
-    return add(a, setMag(B, dot(A, normalize(B))));
-}
-
-/**
- * Return the dot product of two vectors
- * @param {*} a First vector
- * @param {*} b Second vector
- * @returns Scalar product of a and b
- */
-function dot(a, b) {
-    return a[0] * b[0] + a[1] * b[1];
-}
-
-/**
- * Returns the normalized vector
- * @param {*} a Vector to normalize
- * @returns Unit vector in a's direction
- */
-function normalize(a) {
-    magnitude = mag(a);
-    return [a[0]/magnitude, a[1]/magnitude];
-}
-
-/**
- * Return the absolute distance between two vectors
- * @param {*} a First vector
- * @param {*} b Second vector
- * @returns Magnitude of difference between a and b
- */
-function distance(a, b) {
-    return mag(subtract(a,b));
-}
-
-/**
- * Return the number with the minimum magnitude
- * @param {*} a First number
- * @param {*} b Second number
- * @returns Number closest to zero
- */
-function minMag(a, b) {
-    return Math.abs(a) < Math.abs(b) ? a : b;
-}
-
-/**
- * Constrain an angle into the [-pi,pi] domain
- * @param {*} ang Angle in radians
- * @returns Equivalent angle in domain
- */
-function angleWrap(ang) {
-    return ang - 2*Math.PI * Math.floor((ang + Math.PI) / (2*Math.PI));
-}
-
-/**
- * Convert an angle to degrees
- * @param {*} angrad Angle in radians
- * @returns Equivalent angle in degrees
- */
-function degrees(angrad) {
-    return angrad * 180 / Math.PI
-}
-
-/**
- * Whether the distance between two points is within an epsilon
- * @param {*} current Point 1
- * @param {*} goal Point 2
- * @param {*} epsilon Distance apart to be considered 'close enough'
- * @returns True if distance between points is less than epsilon, false if not
- */
-function isWithinBounds(current, goal, epsilon) {
-    dx = goal[0] - current[0];
-    dy = goal[1] - current[1];
-
-    return (Math.abs(dy) < epsilon && Math.abs(dx) < epsilon);
-}
-
-/**
- * Calculate the magnitude of a vector
- * @param {*} xy Vector to calculate magnitude of
- * @returns Magnitude of xy
- */
-function mag(xy) {
-    return Math.sqrt(xy[0] * xy[0] + xy[1] * xy[1]);
-}
-
-/**
- * Limit a vector to a magnitude
- * @param {*} xy Vector to limit
- * @param {*} magnitude Magnitude cap
- * @returns Vector limited to the magnitude cap
- */
-function limit(xy, magnitude) {
-    return mag(xy) > magnitude ? setMag(xy, magnitude) : xy;
-}
-
-/**
- * Calculate the angle between two vectors
- * @param {*} v1 First vector
- * @param {*} v2 Second vector
- * @returns Angle between the two vectors in radians
- */
-function angleBetween(v1, v2) {
-    return Math.atan2(v2[1], v2[0]) - Math.atan2(v1[1], v1[0]);
-}
-
-/**
- * Scale linear output based on angle difference
- * @param {*} dTheta Angle difference
- * @returns Scale factor between 0.5 and 1
- * 
- * change this to account for more ranges
- */
-function angleScale(dTheta) {
-    return dTheta > Math.PI/2 ? 0.5 : 1 - (Math.pow(dTheta, 2) / Math.pow(Math.PI/2, 2)) + 0.5;
-    // return 1;
-}
-
-/**
- * Return the angle the vector is pointing at
- * @param {*} xy Vector to get heading from 
- * @returns Angle vector is pointing at from -pi/2 to pi/2
- */
-function heading(xy) {
-    return Math.atan2(xy[1], xy[0]);
-}
-
-/**
- * Normalize the vector and scale to a new magnitude
- * @param {*} xy Vector to change
- * @param {*} magnitude New magnitude to scale to 
- * @returns Vector scaled to new magnitude
- */
-function setMag(xy, magnitude) {
-    xyMag = mag(xy);
-    return [xy[0] * (magnitude / xyMag), xy[1] * (magnitude / xyMag)]; 
-}
-
-/**
- * Return the difference between two vectors
- * @param {*} v1 First vector
- * @param {*} v2 Second vector
- * @returns v2 - v1
- */
-function subtract(v1, v2) {
-    return [v2[0] - v1[0], v2[1] - v1[1]];
-}
-
-/**
- * Return the sum of two vectors
- * @param {*} v1 First vector
- * @param {*} v2 Second vector
- * @returns (x1+x2,y1+y2) vector
- */
-function add(v1, v2) {
-    return [v1[0] + v2[0], v1[1] + v2[1]];
-}
-
-function scale(a, k) {
-    return [a[0]*k, a[1]*k]
-}
-
-// xyz = []
-// xyz.push(1)
-// console.log(xyz)
-// xyz.push([2,5])
-// console.log(xyz)
-// list = [3,5]; 
-// list = list.concat([2,5])
-// console.log(list)
-
+//Main Script
 initialize();
-main();
+this.interval = setInterval(loop, 1000/50)
