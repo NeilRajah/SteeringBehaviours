@@ -56,9 +56,10 @@ function initialize() {
     t.imgsize = 30;
     t.arrived = false;
     t.reverse = false;
-    t.lookahead = 100; //lookahead distance for predicted
+    t.lookahead = Math.max(bump / 35, 20); //lookahead distance for next point; based on path bumpiness now
     t.tolerance = 5; //distance from the path
-    goal = goals[1];
+    goal = goals[0];
+    t.lastIndex = 0;
 }
 
 /**
@@ -71,33 +72,40 @@ function loop() {
 
         goalIndex++;
         if (goalIndex >= goals.length) {
-            goalIndex = 0;
-            // createRandomPath();
-            r = Math.random() * 10 + 10;
-            theta = Math.random() * Math.PI;
-            t.setPose(goals[0][0] + r * Math.cos(theta), goals[0][1] + r * Math.sin(theta), 0);
-
-            createRandomGoals();
+            reset(t);
             // t.setPose(goals[0][0], goals[0][1], heading(subtract(goals[0], goals[1])))
         }
         goal = goals[goalIndex];
     } else {
-        pathFollow(t);
+        // pathFollow(t);
+        purePursuit(t);
     }
     drawGoals()
     drawTracker(t);
+}
+
+function reset(t) {
+    goalIndex = 0;
+    // createRandomPath();
+    r = Math.random() * 10 + 10;
+    theta = Math.random() * Math.PI;
+    t.setPose(goals[0][0] + r * Math.cos(theta), goals[0][1] + r * Math.sin(theta), 0);
+    t.lastIndex = 0;
+
+    createRandomGoals();
 }
 
 /**
  * Create a random list of goals moving across the width of the canvas
  */
 function createRandomGoals() {
-    steps = 8
+    steps = 20
     step = canvas.width / steps;
     goals = []
+    bump = Math.random() * 800 //larger bump = larger avg. y difference between points
     
     for (i = 0; i < steps; i++) {
-        goals[i] = [(i+0.5) * step, Math.random() * 100 + canvas.height * 0.45]
+        goals[i] = [(i+0.5) * step, Math.random() * bump + canvas.height/2 - bump/2]
         // goals[i] = [(i+0.5) * step, Math.random() * canvas.height]
     }
 
@@ -151,13 +159,13 @@ function seek(t) {
     }
 
     //scale linear speed based on twist (ie. turn more & drive less if far away from target)
-    // t.speed *= -Math.min(Math.PI/2, Math.abs(twist)) / (Math.PI/2) + 1; //zero at 90+ degrees
+    t.speed *= -Math.min(Math.PI/2, Math.abs(twist)) / (Math.PI/2) + 1; //zero at 90+ degrees
     if (t.reverse) {
         t.speed = -Math.abs(t.speed); //negative speed if reversing
     }
 
-    turnConst = 0.09; //change the angle based on how much the change in angle is needed
-    t.ang = Math.sign(twist) * Math.min(t.maxAng, turnConst * Math.abs(twist))
+    //change the angle based on how much the change in angle is needed
+    t.ang = Math.sign(twist) * Math.min(t.maxAng, t.turnConst * Math.abs(twist))
     t.theta += t.ang; //limit to maximum turn rate
     t.step();
 }
@@ -170,12 +178,12 @@ function seek(t) {
 function arrive(t) {
     //distance away from goal and finish distance
     goalDist = Math.min(t.lookahead + t.speed * 10, 50);
-    endDist = 5;
+    endDist = t.lookahead/2;
 
     if (isWithinBounds(t.xy(), goal, goalDist)) { //if in ramping zone of END point
-        dist = mag(subtract(goal, t.xy()));
-        scale = dist < endDist ? 0 : dist / goalDist;
-        t.speed = t.maxLin * scale; //ramp down linearly
+        dist = distance(goal, t.xy());
+        scaleFactor = dist < endDist ? 0 : dist / goalDist;
+        t.speed = t.maxLin * scaleFactor; //ramp down linearly
         t.arrived = dist < endDist;
 
     } else { //anywhere else
@@ -216,8 +224,6 @@ function pathFollow(t) {
         } 
     }
 
-    // console.log(normals[0], goals[0], goals[1]);
-
     //choose the closest normal    
     minDist = 100000000000; //distance of closest normal 
     record = 0; //index of closest normal
@@ -245,6 +251,7 @@ function pathFollow(t) {
     } else if (distFromPath > t.tolerance) {
         //set target further from normal based on distance from the path
         // goal = add(t.normal, setMag(B, distFromPath * 1.2));
+
         goal = t.normal //just the normal point
         seek(t); //seek target
 
@@ -256,7 +263,207 @@ function pathFollow(t) {
     }
 }
 
+function purePursuit(t) {
+    //find the closest point
+    minDist = 100000000
+    record = t.lastIndex
+    //optimize this to search through less points (later start, earlier end)
+    for (i = 0; i < goals.length; i++) {
+        dist = distsq(t.xy(), goals[i]);
+        if (dist < minDist) {
+            minDist = dist;
+            record = i
+        }
+    }
+    t.closest = goals[record];
+    t.lastIndex = record
+
+    //find all intersects
+    intersects = []
+    //started at Math.max(0, t.lastIndex-1)
+    for (i = 0; i < goals.length-1; i++) {
+        intersects = intersects.concat(lcIntersect(goals[i], goals[i+1], t.xy(), t.lookahead));
+    }
+
+    //draw intersects
+    for (i = 0; i < intersects.length; i++) {
+        drawPoint(intersects[i][0], intersects[i][1], "green", Math.max(5, t.lookahead/10))
+    }
+    
+    //if there are no intersects, choose the closest point to the Tracker
+    if (intersects.length == 0) {
+        // t.target = goals[Math.min(record+1, goals.length)] //could potentially be closest + some distance along the path
+        t.target = t.closest
+        // console.log("no intersects")
+    //if there are intersects, choose the last one added
+    } else {
+        t.target = intersects[Math.max(0, intersects.length-1)]
+        // console.log("intersects")
+    }
+    goal = t.target
+
+    //set the speed
+    t.speed = t.maxLin
+
+    // if (intersects.length == 0) {
+    //     console.log(intersects.length, t.xy(), goals[goals.length-1], goal)
+    // }
+
+    //set the goal to the last point if closer to the goal
+    if (goal) {
+        if (distance(t.xy(), goals[goals.length-1]) < distance(t.xy(), goal)) {
+            goal = goals[goals.length-1]; //set to end point if close enough
+            arrive(t); //scale output
+        }
+    }
+    
+    seek(t)
+}
+
+//Graphics
+
+/**
+ * Draw a point
+ * @param {*} x X value for center of circle
+ * @param {*} y Y value for center of circle
+ */
+function drawPoint(x, y, color, rad=10) {
+    c.fillStyle = color
+    c.beginPath();
+    c.arc(x, y, rad, 0, 2 * Math.PI);
+    c.fill();
+}
+
+/**
+ * Clear the background for the next frame
+ */
+function clear() {
+    c.fillStyle = "white"
+    c.fillRect(0,0, canvas.width, canvas.height)
+}
+
+/**
+ * Draw a Tracker object
+ * @param {*} t Tracker to draw
+ */
+function drawTracker(t) {
+    // //draw all the normal points, line from predicted
+    // for (i = 0; i < normals.length; i++) {
+    //     c.strokeStyle = "blue"
+    //     c.lineWidth = 1
+    //     drawLine(t.predicted[0], t.predicted[1], normals[i][0], normals[i][1])
+    //     drawPoint(normals[i][0], normals[i][1], "blue", 3)
+    // }
+
+    // //draw lookahead
+    // c.strokeStyle = "grey"
+    // drawLine(t.x, t.y, t.predicted[0], t.predicted[1]);
+    // drawPoint(t.predicted[0], t.predicted[1], "grey", 5);
+    // drawLine(t.normal[0], t.normal[1], t.predicted[0], t.predicted[1]);
+
+    //draw closest
+    // if (t.closest) {
+    //     drawPoint(t.closest[0], t.closest[1], "red");
+    //     c.strokeStyle = "red"
+    //     drawLine(t.x, t.y, t.closest[0], t.closest[1]);
+    // }
+
+    //draw the lookahead circle
+    c.strokeStyle = "black"
+    c.beginPath();
+    c.arc(t.x, t.y, t.lookahead, 0, 2*Math.PI);
+    c.stroke();
+
+    //draw the target
+    if (t.target) {
+        drawPoint(t.target[0], t.target[1], "blue", 5);
+    }
+    
+    //draw goal
+    drawPoint(goal[0], goal[1], "red", 5);
+    c.strokeStyle = "red";
+    drawLine(t.x, t.y, goal[0], goal[1]) //line from robot to goal
+
+    //draw Tracker
+    half = t.imgsize / 2;
+    c.save();
+    c.translate(t.x, t.y);
+    c.rotate(t.theta + Math.PI/2);
+    c.drawImage(t.img, -half, -half, t.imgsize, t.imgsize);
+    c.restore();
+}
+
+/**
+ * Draw a line between two points
+ * @param {*} x1 X of first point
+ * @param {*} y1 Y of first point
+ * @param {*} x2 X of second point
+ * @param {*} y2 Y of second point
+ */
+function drawLine(x1, y1, x2, y2) {
+    c.beginPath()
+    c.moveTo(x1, y1);
+    c.lineTo(x2, y2);
+    c.stroke();
+}
+
+/**
+ * Draw the goals and lines connecting them
+ */
+function drawGoals() {
+    //draw path
+    c.fillStyle = "gray";
+    c.lineWidth = 2;
+
+    //draw lines
+    c.strokeStyle = "black";
+    c.lineWidth = 3;
+    c.beginPath();
+    c.moveTo(goals[0][0], goals[0][1]);
+    for (i = 1; i < goals.length; i++) {
+        c.lineTo(goals[i][0], goals[i][1]);
+    }
+    c.stroke();
+
+    //draw points
+    for (i = 0; i < goals.length; i++) {
+        drawPoint(goals[i][0], goals[i][1], "black", 7);
+    }
+}
+
 //Utility
+
+function lcIntersect(E, L, C, r) {
+    // console.log("here")
+    d = subtract(E, L);
+    f = subtract(C, E);
+
+    a = dot(d, d);
+    b = 2 * dot(f, d);
+    u = dot(f, f) - r*r;
+    disc = b*b - 4*a*u;
+
+    if (disc < 0) {return []};
+
+    disc = Math.sqrt(disc);
+    t1 = (-b - disc) / (2*a);
+    t2 = (-b + disc) / (2*a);
+
+    intersects = [];
+
+    //calculate the points
+    //if they are on the line segment, add them
+    p1 = add(E, scale(d, t1))
+    p2 = add(E, scale(d, t2))
+
+    if (pointOnLine(p1, E, L)) {
+        intersects.push(p1);
+    } 
+    if (pointOnLine(p2, E, L)) {
+        intersects.push(p2);
+    }
+    return intersects;
+}
 
 /**
  * Return whether a point is on a line within a tolerance
@@ -452,7 +659,7 @@ function setMag(xy, magnitude) {
  * Return the difference between two vectors
  * @param {*} v1 First vector
  * @param {*} v2 Second vector
- * @returns (dx,dy) vector
+ * @returns v2 - v1
  */
 function subtract(v1, v2) {
     return [v2[0] - v1[0], v2[1] - v1[1]];
@@ -468,99 +675,18 @@ function add(v1, v2) {
     return [v1[0] + v2[0], v1[1] + v2[1]];
 }
 
-//Graphics
-
-/**
- * Draw a point
- * @param {*} x X value for center of circle
- * @param {*} y Y value for center of circle
- */
-function drawPoint(x, y, color, rad=10) {
-    c.fillStyle = color
-    c.beginPath();
-    c.arc(x, y, rad, 0, 2 * Math.PI);
-    c.fill();
+function scale(a, k) {
+    return [a[0]*k, a[1]*k]
 }
 
-/**
- * Clear the background for the next frame
- */
-function clear() {
-    c.fillStyle = "white"
-    c.fillRect(0,0, canvas.width, canvas.height)
-}
+// xyz = []
+// xyz.push(1)
+// console.log(xyz)
+// xyz.push([2,5])
+// console.log(xyz)
+// list = [3,5]; 
+// list = list.concat([2,5])
+// console.log(list)
 
-/**
- * Draw a Tracker object
- * @param {*} t Tracker to draw
- */
-function drawTracker(t) {
-    // //draw goal
-    drawPoint(goal[0], goal[1], "green", 5);
-    c.strokeStyle = "green";
-    drawLine(t.x, t.y, goal[0], goal[1]) //line from robot to goal
-
-    //draw all the normal points, line from predicted
-    for (i = 0; i < normals.length; i++) {
-        c.strokeStyle = "blue"
-        c.lineWidth = 1
-        drawLine(t.predicted[0], t.predicted[1], normals[i][0], normals[i][1])
-        drawPoint(normals[i][0], normals[i][1], "blue", 3)
-    }
-
-    //draw lookahead
-    c.strokeStyle = "grey"
-    drawLine(t.x, t.y, t.predicted[0], t.predicted[1]);
-    drawPoint(t.predicted[0], t.predicted[1], "grey", 5);
-    drawLine(t.normal[0], t.normal[1], t.predicted[0], t.predicted[1]);
-
-    //draw Tracker
-    half = t.imgsize / 2;
-    c.save();
-    c.translate(t.x, t.y);
-    c.rotate(t.theta + Math.PI/2);
-    c.drawImage(t.img, -half, -half, t.imgsize, t.imgsize);
-    c.restore();
-}
-
-/**
- * Draw a line between two points
- * @param {*} x1 X of first point
- * @param {*} y1 Y of first point
- * @param {*} x2 X of second point
- * @param {*} y2 Y of second point
- */
-function drawLine(x1, y1, x2, y2) {
-    c.beginPath()
-    c.moveTo(x1, y1);
-    c.lineTo(x2, y2);
-    c.stroke();
-}
-
-/**
- * Draw the goals and lines connecting them
- */
-function drawGoals() {
-    //draw path
-    c.fillStyle = "gray";
-    c.lineWidth = 2;
-
-    //draw lines
-    c.strokeStyle = "black";
-    c.lineWidth = 3;
-    c.beginPath();
-    c.moveTo(goals[0][0], goals[0][1]);
-    for (i = 1; i < goals.length; i++) {
-        c.lineTo(goals[i][0], goals[i][1]);
-    }
-    c.stroke();
-
-    //draw points
-    for (i = 0; i < goals.length; i++) {
-        drawPoint(goals[i][0], goals[i][1], "black", 7);
-    }
-}
-
-console.log(pointOnLine([5,5], [0,0], [10,10], 1.0))
 initialize();
 main();
