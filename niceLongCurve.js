@@ -1,6 +1,7 @@
-//Create an invisible element in the DOM with the contents of the path
-niceLongCurve = document.createElement('niceLongCurve');
-niceLongCurve.innerText = `611
+//Create an invisible element in the DOM with the contents of the path to read later
+var curve = document.createElement('curve');
+// curve.id = 'niceLongCurve';
+curve.innerText = `611
 23.400 25.700 0.000 100000.000 0.000
 23.399 26.703 1.003 100000.000 20.000
 23.399 27.703 2.003 100000.000 28.284
@@ -613,4 +614,4 @@ niceLongCurve.innerText = `611
 301.370 296.050 608.995 100000.000 20.000
 301.379 297.051 609.997 100000.000 0.000
 `
-niceLongCurve.style.display = "none";
+curve.style.display = "none";

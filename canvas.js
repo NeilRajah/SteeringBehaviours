@@ -33,12 +33,15 @@ function initialize() {
     c = canvas.getContext('2d');
 
     //path pattern
-    createRandomGoals();
+    // createRandomGoals();
+    readPath();
 
     //create tracker starting at the first goal point
-    t = new Tracker(goals[0][0], goals[0][1], heading(subtract(goals[0], goals[1])));
+    t = new Tracker(0,0,0);
     theta = heading(subtract(goals[0], goals[1])) //point towards first point
-    t.setPose(goals[0][0], goals[0][1], theta);
+    start = goals[0]
+    t.setPose(start[0], start[1], theta);
+    // t = new Tracker(0,0,0)
 
     img = new Image();
     img.src = "https://tinyurl.com/y99qsysr";
@@ -46,10 +49,14 @@ function initialize() {
     t.imgsize = 30;
     t.arrived = false; //whether the Tracker has arrived at the final point
     t.reverse = false; //whether the Tracker is following in reverse
-    t.lookahead = Math.max(bump / 20, 20); //lookahead distance for next point; based on path bumpiness now
+    // t.lookahead = Math.max(bump / 20, 20); //lookahead distance for next point; based on path bumpiness now
+    t.lookahead = 30; //6 pixels
     t.tolerance = 5; //distance from the path
     t.lastIndex = 0; //speed purposes
-    goal = goals[0]; //the current goal is the first goal in the list
+    // goal = goals[0]; //the current goal is the first goal in the list
+    //for arriving
+    t.goalDist = t.lookahead*2
+    t.endDist = t.lookahead/2;
 }
 
 /**
@@ -64,7 +71,7 @@ function loop() {
     }
     clear();
     drawGoals()
-    drawTracker(t);
+    drawTracker();
 }
 
 /**
@@ -75,8 +82,8 @@ function reset(t) {
     t.arrived = false;
     goalIndex = 0;
 
-    //create random goals for the Tracker to follow
-    createRandomGoals();
+    // //create random goals for the Tracker to follow
+    // createRandomGoals();
 
     //give random position away from first point
     r = Math.random() * 10 + 10;
@@ -120,6 +127,25 @@ function createRandomPath() {
 }
 
 /**
+ * Read the path from the file
+ */
+function readPath() {
+    // console.log(curve)
+    // console.log(document.getElementsByName('curve'))
+    lines = curve.innerHTML.split("<br>"); //split into individual lines
+    goals = []
+
+    //first line is just number of points so skip it
+    for (i = 1; i < lines.length; i++) {
+        items = lines[i].split(' '); //items are separated by spaces
+        x = parseFloat(items[0]) * 5
+        y = parseFloat(items[1]) * 3
+        goals[i-1] = [x,y]
+    }
+    goal = goals[0];
+ }
+
+/**
  * Update a Tracker to move towards the target
  */
 function seek() {
@@ -161,15 +187,11 @@ function seek() {
  * the Tracker.
  */
 function arrive() {
-    //distance away from goal and finish distance
-    goalDist = Math.min(t.lookahead + t.speed * 10, 50);
-    endDist = t.lookahead/2;
-
-    if (isWithinBounds(t.xy(), goal, goalDist)) { //if in ramping zone of END point
+    if (isWithinBounds(t.xy(), goal, t.goalDist)) { //if in ramping zone of END point
         dist = distance(goal, t.xy());
-        scaleFactor = dist < endDist ? 0 : dist / goalDist;
+        scaleFactor = dist < t.endDist ? 0 : dist / t.goalDist;
         t.speed = t.maxLin * scaleFactor; //ramp down linearly
-        t.arrived = dist < endDist;
+        t.arrived = dist < t.endDist;
 
     } else { //anywhere else
         t.speed = t.maxLin;
@@ -290,8 +312,8 @@ function purePursuit() {
 
     //set the goal to the last point if closer to the goal
     if (goal) {
-        if (distance(t.xy(), goals[goals.length-1]) < distance(t.xy(), goal)) {
-            goal = goals[goals.length-1]; //set to end point if close enough
+        if (distance(t.xy(), goals[goals.length-2]) < t.goalDist) {
+            goal = goals[goals.length-2]; //set to end point if close enough
             arrive(); //scale output
         }
     }
@@ -323,14 +345,19 @@ function clear() {
 }
 
 /**
- * Draw a Tracker object
- * @param {*} t Tracker to draw
+ * Draw the Tracker
  */
-function drawTracker(t) {
+function drawTracker() {
     //draw the lookahead circle
     c.strokeStyle = "black"
     c.beginPath();
     c.arc(t.x, t.y, t.lookahead, 0, 2*Math.PI);
+    c.stroke();
+
+    //draw the arrival circle
+    c.strokeStyle = "black"
+    c.beginPath();
+    c.arc(t.x, t.y, t.goalDist, 0, 2*Math.PI);
     c.stroke();
 
     //draw intersects
@@ -383,7 +410,7 @@ function drawGoals() {
 
     //draw lines
     c.strokeStyle = "black";
-    c.lineWidth = 3;
+    c.lineWidth = 1;
     c.beginPath();
     c.moveTo(goals[0][0], goals[0][1]);
     for (i = 1; i < goals.length; i++) {
@@ -392,9 +419,9 @@ function drawGoals() {
     c.stroke();
 
     //draw points
-    for (i = 0; i < goals.length; i++) {
-        drawPoint(goals[i][0], goals[i][1], "black", 7);
-    }
+    // for (i = 0; i < goals.length; i++) {
+    //     drawPoint(goals[i][0], goals[i][1], "black", 2);
+    // }
 }
 
 //Main Script
