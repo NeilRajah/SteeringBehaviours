@@ -12,6 +12,7 @@
  var goal; //goal point
  var goals; //all the current goal points
  var goalIndex; //index of the goal in goals
+ var paths; //paths to follow
 
 window.onload = function() {
     //set up the file chooser
@@ -27,14 +28,13 @@ window.onload = function() {
 function initialize() {
     console.log("initialize");
     canvas = document.querySelector('canvas');
-    winScale = 0.97;
-    canvas.width = window.innerWidth * winScale;
-    canvas.height = window.innerHeight * winScale;
+    canvas.height = window.innerHeight * 0.9;
+    canvas.width = canvas.height * 1.58;
     c = canvas.getContext('2d');
 
     //path pattern
-    // createRandomGoals();
-    readPath();
+    paths = [jShape_6, almostS, pretzel, wrongL, niceLongCurve];
+    chooseRandomPath();
 
     //create tracker starting at the first goal point
     t = new Tracker(0,0,0);
@@ -49,14 +49,11 @@ function initialize() {
     t.imgsize = 30;
     t.arrived = false; //whether the Tracker has arrived at the final point
     t.reverse = false; //whether the Tracker is following in reverse
-    // t.lookahead = Math.max(bump / 20, 20); //lookahead distance for next point; based on path bumpiness now
     t.lookahead = 30; //6 pixels
     t.tolerance = 5; //distance from the path
     t.lastIndex = 0; //speed purposes
-    // goal = goals[0]; //the current goal is the first goal in the list
-    //for arriving
-    t.goalDist = t.lookahead*2
-    t.endDist = t.lookahead/2;
+    t.goalDist = t.lookahead*2 //distance to be away from final goal to start slowing down
+    t.endDist = t.lookahead/2; //distance to be away from final goal to be considered finished
 }
 
 /**
@@ -83,7 +80,7 @@ function reset(t) {
     goalIndex = 0;
 
     // //create random goals for the Tracker to follow
-    // createRandomGoals();
+    chooseRandomPath();
 
     //give random position away from first point
     r = Math.random() * 10 + 10;
@@ -126,22 +123,11 @@ function createRandomPath() {
     goal = goals[goalIndex];
 }
 
-/**
- * Read the path from the file
- */
-function readPath() {
-    // console.log(curve)
-    // console.log(document.getElementsByName('curve'))
-    lines = curve.innerHTML.split("<br>"); //split into individual lines
-    goals = []
-
-    //first line is just number of points so skip it
-    for (i = 1; i < lines.length; i++) {
-        items = lines[i].split(' '); //items are separated by spaces
-        x = parseFloat(items[0]) * 5
-        y = parseFloat(items[1]) * 3
-        goals[i-1] = [x,y]
-    }
+ /**
+  * Choose a random path in paths to be the goal
+  */
+ function chooseRandomPath() {
+    goals = paths[Math.floor(Math.random() * paths.length)];
     goal = goals[0];
  }
 
@@ -419,9 +405,9 @@ function drawGoals() {
     c.stroke();
 
     //draw points
-    // for (i = 0; i < goals.length; i++) {
-    //     drawPoint(goals[i][0], goals[i][1], "black", 2);
-    // }
+    for (i = 0; i < goals.length; i++) {
+        drawPoint(goals[i][0], goals[i][1], "black", 3)
+    }
 }
 
 //Main Script

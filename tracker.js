@@ -12,16 +12,17 @@
   * @param {*} theta Angle in radians
   */
  function Tracker(x, y, theta) {
-     this.x = x;
-     this.y = y;
-     this.theta = theta;
-     this.maxLin = 10; //5.5
-     this.maxAng = 0.5; //0.8
+     this.x = x; //x position
+     this.y = y; //y position
+     this.theta = theta; //heading
+     this.maxLin = 7.5; //linear speed
+     this.maxAng = 0.8; //max turning speed
      this.speed = this.maxLin;
      this.ang = this.maxAng;
      this.mass = 1;
-     this.turnConst = 0.2
+     this.turnConst = 0.2; //multiply angle error by this
 
+     //functions
      this.move = function(dx, dy) {this.x += dx; this.y += dy;};
      this.step = function() {this.x += this.velVector()[0]; this.y += this.velVector()[1];}
      this.velVector = () => [this.speed * Math.cos(this.theta), this.speed * Math.sin(this.theta)];
@@ -31,14 +32,3 @@
      this.xy = function() {return [this.x, this.y]};
      this.setPose = function(x,y,theta) {this.x = x; this.y = y; this.theta = theta;};
  }
-
- /**
-  * Move the tracker in the x and y direction
-  * @param {*} dx Change in x
-  * @param {*} dy Change in y
-  */
-function move(dx, dy) {
-    this.x += dx;
-    this.y += dy;
-    console.log(this.x, this.y)
-}
